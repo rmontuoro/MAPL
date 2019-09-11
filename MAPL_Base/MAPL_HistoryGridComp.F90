@@ -124,8 +124,8 @@ contains
 
 !=====================================================================
   subroutine SetServices ( gc, rc )
-    type(ESMF_GridComp), intent(inout) :: gc     ! composite gridded component
-    integer, optional               :: rc     ! return code
+    type(ESMF_GridComp) :: gc     ! composite gridded component
+    integer, intent(out)      :: rc     ! return code
     
     integer                         :: status
     character(len=ESMF_MAXSTR)      :: IAm="History:SetServices" 

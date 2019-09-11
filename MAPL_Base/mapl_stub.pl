@@ -34,8 +34,8 @@ module $NAME
    public SetServices
 contains
    subroutine SetServices ( GC, RC )
-      type(ESMF_GridComp), intent(INOUT) :: GC  ! gridded component
-      integer, optional                  :: RC  ! return code
+      type(ESMF_GridComp)  :: GC  ! gridded component
+      integer, intent(out) :: RC  ! return code
       call ProxySetServices ( GC, RC=RC )
    end subroutine SetServices 
 end module $NAME

@@ -440,7 +440,7 @@ enddo
 recursive subroutine MAPL_GenericSetServices ( GC, RC )
 
   !ARGUMENTS:
-  type(ESMF_GridComp),                  intent(INOUT) :: GC  ! Gridded component
+  type(ESMF_GridComp) :: GC  ! Gridded component
   integer,                              intent(  OUT) :: RC  ! Return code
 
 ! !DESCRIPTION: {\tt MAPL\_GenericSetServices} performs the following tasks:
@@ -3914,7 +3914,16 @@ end subroutine MAPL_DateStampGet
     character(len=*),              intent(IN   ) :: NAME
     type(ESMF_Grid),  optional,    intent(INout) :: GRID
     character(len=*), optional,    intent(IN   ) :: CONFIGFILE
-    external                                     :: SS
+    interface
+      subroutine SS(gridcomp, rc)
+        use ESMF_CompMod
+        implicit none
+        type(ESMF_GridComp)   :: gridcomp 
+        integer, intent(out)      :: rc     
+      end subroutine
+    end interface
+    optional                                     :: SS
+   ! external                                     :: SS
     type(ESMF_GridComp), optional, intent(IN   ) :: parentGC
     integer,           optional  , intent(IN   ) :: petList(:)
     integer,           optional  , intent(  OUT) :: rc
@@ -4051,7 +4060,16 @@ recursive integer function MAPL_AddChildFromGC(GC, NAME, SS, petList, configFile
   !ARGUMENTS:
   type(ESMF_GridComp), intent(INOUT) :: GC
   character(len=*),    intent(IN   ) :: NAME
-  external                           :: SS
+  interface
+    subroutine SS(gridcomp, rc)
+        use ESMF_CompMod
+        implicit none
+        type(ESMF_GridComp)   :: gridcomp
+        integer, intent(out)  :: rc      
+    end subroutine
+  end interface
+  optional                                     :: SS
+ ! external                           :: SS
   integer, optional  , intent(IN   ) :: petList(:)
   character(len=*), optional, intent(IN   ) :: configFile
   integer, optional  , intent(  OUT) :: rc

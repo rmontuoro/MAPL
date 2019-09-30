@@ -39,7 +39,7 @@ module MAPL_HistoryGridCompMod
 
 ! !PUBLIC MEMBER FUNCTIONS:
 
-  public SetServices
+!  public SetServices
 
 ! !DESCRIPTION: 
 !                \input{MAPL_HistoryDescr.tex}
@@ -123,7 +123,7 @@ module MAPL_HistoryGridCompMod
 contains
 
 !=====================================================================
-  subroutine SetServices ( gc, rc )
+  subroutine SetServices ( gc, rc ) bind(c, name="hist_setservices")
     type(ESMF_GridComp) :: gc     ! composite gridded component
     integer, intent(out)      :: rc     ! return code
     

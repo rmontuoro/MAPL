@@ -22,7 +22,7 @@
 !
 ! !PUBLIC MEMBER FUNCTIONS:
 
-   PUBLIC SetServices
+!   PUBLIC SetServices
 !
 ! !DESCRIPTION: 
 !
@@ -77,7 +77,7 @@ CONTAINS
 !
 ! !INTERFACE:
 
-   SUBROUTINE SetServices ( GC, RC )
+   SUBROUTINE SetServices ( GC, RC ) bind(c, name="orb_setservices")
 
 ! !ARGUMENTS:
 

@@ -59,6 +59,8 @@ module MAPL_CapMod
       procedure :: get_cap_gc
       procedure :: get_cap_rc_file
       procedure :: get_egress_file
+      procedure :: get_proc_name
+      procedure :: get_shared_obj
 
    end type MAPL_Cap
 
@@ -76,22 +78,28 @@ module MAPL_CapMod
 
 contains
    
-   function new_MAPL_Cap(name, set_services, unusable, cap_options, rc) result(cap)
+   function new_MAPL_Cap(name, unusable, set_services, cap_options, rc) result(cap)
       type (MAPL_Cap) :: cap
       character(*), intent(in) :: name
-      procedure() :: set_services
       class (KeywordEnforcer),  optional, intent(in) :: unusable
+      procedure(), optional    :: set_services
       class ( MAPL_CapOptions), optional, intent(in) :: cap_options
       integer, optional, intent(out) :: rc
       integer :: status
 
       cap%name = name
-      cap%set_services => set_services
 
       if (present(cap_options)) then
          allocate(cap%cap_options, source = cap_options)
       else
          allocate(cap%cap_options, source = MAPL_CapOptions())
+      endif
+
+      if (present(set_services)) then
+         cap%set_services => set_services
+      else
+         cap%set_services => null()
+         _ASSERT(trim(cap%cap_options%shared_obj) /= 'none', "shared lib is needed  when setservices is not present")
       endif
 
       if (cap%cap_options%use_comm_world) then
@@ -312,7 +320,6 @@ contains
       _VERIFY(status)
 
       call this%initialize_cap_gc(mapl_comm)
-
       call this%cap_gc%set_services(rc = status)
       _VERIFY(status)
       call this%cap_gc%initialize(rc=status)
@@ -364,8 +371,9 @@ contains
    subroutine initialize_cap_gc(this, mapl_comm)
      class(MAPL_Cap), intent(inout) :: this
      type(MAPL_Communicators), intent(in) :: mapl_comm
-     call MAPL_CapGridCompCreate(this%cap_gc, mapl_comm, this%set_services, this%get_cap_rc_file(), &
-           this%name, this%get_egress_file())     
+     call MAPL_CapGridCompCreate(this%cap_gc, mapl_comm, this%get_cap_rc_file(), &
+           this%name, root_set_services=this%set_services, proc_name=this%get_proc_name(), &
+           shared_obj = this%get_shared_obj(), final_file=this%get_egress_file())     
    end subroutine initialize_cap_gc
    
 
@@ -515,6 +523,18 @@ contains
      character(len=:), allocatable :: egress_file
      allocate(egress_file, source=this%cap_options%egress_file)
    end function get_egress_file
+
+   function get_proc_name(this) result(proc_name)
+     class(MAPL_Cap), intent(in) :: this
+     character(len=:), allocatable :: proc_name
+     allocate(proc_name, source=this%cap_options%proc_name)
+   end function get_proc_name
+
+   function get_shared_obj(this) result(shared_obj)
+     class(MAPL_Cap), intent(in) :: this
+     character(len=:), allocatable :: shared_obj
+     allocate(shared_obj, source=this%cap_options%shared_obj)
+   end function get_shared_obj
   
 end module MAPL_CapMod
 

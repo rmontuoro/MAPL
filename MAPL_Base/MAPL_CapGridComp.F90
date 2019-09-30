@@ -14,9 +14,10 @@ module MAPL_CapGridCompMod
   use MAPL_LocStreamMod
   use ESMFL_Mod
   use MAPL_ShmemMod
-  use MAPL_HistoryGridCompMod, only : Hist_SetServices => SetServices
+  use MAPL_KeywordEnforcerMod
+!  use MAPL_HistoryGridCompMod, only : Hist_SetServices => SetServices
   use MAPL_HistoryGridCompMod, only : HISTORY_ExchangeListWrap
-  use MAPL_ExtDataGridCompMod, only : ExtData_SetServices => SetServices
+!  use MAPL_ExtDataGridCompMod, only : ExtData_SetServices => SetServices
   use MAPL_ExtDataGridCompMod, only : T_EXTDATA_STATE, EXTDATA_WRAP
   use MAPL_CFIOServerMod
   use MAPL_ConfigMod
@@ -38,6 +39,7 @@ module MAPL_CapGridCompMod
      type (ESMF_GridComp)          :: gc
      procedure(), pointer, nopass  :: root_set_services => null()
      character(len=:), allocatable :: final_file, name, cap_rc_file
+     character(len=:), allocatable :: proc_name, shared_obj
      type (MAPL_Communicators)     :: mapl_comm
 !!$     integer     :: mapl_comm
      integer :: nsteps, heartbeat_dt, perpetual_year, perpetual_month, perpetual_day
@@ -79,37 +81,47 @@ module MAPL_CapGridCompMod
 contains
 
   
-  subroutine MAPL_CapGridCompCreate(cap, mapl_comm, root_set_services, cap_rc, name, final_file)
-    type(MAPL_CapGridComp), intent(out), target :: cap
+  subroutine MAPL_CapGridCompCreate(cap_gc, mapl_comm, cap_rc, name, unusable, root_set_services, proc_name, shared_obj, final_file)
+    type(MAPL_CapGridComp), intent(out), target :: cap_gc
     type (MAPL_Communicators), intent(in) :: mapl_comm
-!!$    integer, intent(in) :: mapl_comm
-    procedure() :: root_set_services
     character(*), intent(in) :: cap_rc, name
-    character(len=*), optional, intent(in) :: final_file
+    class (KeywordEnforcer), optional, intent(in) :: unusable
+    procedure(), optional :: root_set_services
+    character(*),optional,intent(in) :: proc_name
+    character(*),optional,intent(in) :: shared_obj
+    character(len=*),optional, intent(in) :: final_file
 
     type(MAPL_CapGridComp_Wrapper) :: cap_wrapper
     type(MAPL_MetaComp_Wrapper) :: meta_comp_wrapper
     integer :: status, rc
 
+    _UNUSED_DUMMY(unusable)
     
-    cap%cap_rc_file = cap_rc
-    cap%mapl_comm = mapl_comm
-    cap%root_set_services => root_set_services
+    cap_gc%cap_rc_file = cap_rc
+    cap_gc%mapl_comm = mapl_comm
+    cap_gc%proc_name  = 'setservices'
+    cap_gc%shared_obj = 'none'
+    cap_gc%root_set_services => null()
+
+    if(present(root_set_services)) cap_gc%root_set_services => root_set_services
+    if(present(shared_obj)) cap_gc%shared_obj = shared_obj
+    if(present(proc_name )) cap_gc%proc_name  = proc_name
+
     if (present(final_file)) then
-       allocate(cap%final_file, source=final_file)
+       allocate(cap_gc%final_file, source=final_file)
     end if
 
-    allocate(cap%name, source=name)
+    allocate(cap_gc%name, source=name)
 
-    cap%gc = ESMF_GridCompCreate(name='MAPL_CapGridComp', rc=status)
+    cap_gc%gc = ESMF_GridCompCreate(name='MAPL_CapGridComp', rc=status)
     _VERIFY(status)
 
-    cap_wrapper%ptr => cap
-    call ESMF_UserCompSetInternalState(cap%gc, internal_cap_name, cap_wrapper, status)
+    cap_wrapper%ptr => cap_gc
+    call ESMF_UserCompSetInternalState(cap_gc%gc, internal_cap_name, cap_wrapper, status)
     _VERIFY(status)
 
     allocate(meta_comp_wrapper%ptr)
-    call ESMF_UserCompSetInternalState(cap%gc, internal_meta_comp_name, meta_comp_wrapper, status)
+    call ESMF_UserCompSetInternalState(cap_gc%gc, internal_meta_comp_name, meta_comp_wrapper, status)
     _VERIFY(status)
   end subroutine MAPL_CapGridCompCreate
 
@@ -166,8 +178,9 @@ contains
 
 
     type (MAPL_MetaComp), pointer :: MAPLOBJ
-    procedure(), pointer :: root_set_services
     type(MAPL_CapGridComp), pointer :: cap
+    character(len=ESMF_MAXSTR )     :: ext_sharedObj,hist_sharedObj
+
 
     _UNUSED_DUMMY(import_state)
     _UNUSED_DUMMY(export_state)
@@ -472,18 +485,24 @@ contains
     call MAPL_Set(MAPLOBJ, CF=CAP%CF_ROOT, RC=STATUS)
     _VERIFY(STATUS)
 
-    root_set_services => cap%root_set_services
-
-    cap%root_id = MAPL_AddChild(MAPLOBJ, name = root_name, SS = root_set_services, rc = status)  
-    _VERIFY(status)
+    if(associated(cap%root_set_services)) then
+       cap%root_id = MAPL_AddChild(MAPLOBJ, name = root_name, SS = cap%root_set_services, rc = status)  
+       _VERIFY(status)
+    else
+       cap%root_id = MAPL_AddChild(MAPLOBJ, name = root_name, procName=cap%proc_name, sharedObj=cap%shared_obj, rc = status)  
+       _VERIFY(status)
+    endif
 
     !  Create History child
     !----------------------
 
     call MAPL_Set(MAPLOBJ, CF=CAP%CF_HIST, RC=STATUS)
     _VERIFY(STATUS)
+    call MAPL_GetResource(MAPLOBJ, hist_sharedObj, "HIST.SETSERVICES:", default = "libMAPL_Base.so", rc = status)
+    _VERIFY(status)
 
-    cap%history_id = MAPL_AddChild( MAPLOBJ, name = 'HIST', SS = HIST_SetServices, rc = status)  
+    !cap%history_id = MAPL_AddChild( MAPLOBJ, name = 'HIST', SS = HIST_SetServices, rc = status)  
+    cap%history_id = MAPL_AddChild( MAPLOBJ, name = 'HIST', procName="hist_setservices", sharedObj=hist_sharedOBJ, rc = status)  
     _VERIFY(status)
 
 
@@ -511,7 +530,11 @@ contains
     call MAPL_Set(MAPLOBJ, CF=CAP%CF_EXT, RC=STATUS)
     _VERIFY(STATUS)
 
-    cap%extdata_id = MAPL_AddChild (MAPLOBJ, name = 'EXTDATA', SS = ExtData_SetServices, rc = status)
+    call MAPL_GetResource(MAPLOBJ, ext_sharedObj, "EXT.SETSERVICES:", default = "libMAPL_Base.so", rc = status)
+    _VERIFY(status)
+
+    !cap%extdata_id = MAPL_AddChild (MAPLOBJ, name = 'EXTDATA', SS = ExtData_SetServices, rc = status)
+    cap%extdata_id = MAPL_AddChild (MAPLOBJ, name = 'EXTDATA', procName="ext_setservices", sharedObj=ext_sharedObj, rc = status)
     _VERIFY(status)
 
     ! Add NX and NY from AGCM.rc to ExtData.rc as well as name of ExtData rc file

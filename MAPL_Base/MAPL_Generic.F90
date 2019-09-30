@@ -3906,12 +3906,12 @@ end subroutine MAPL_DateStampGet
 
   !INTERFACE:
   recursive integer function MAPL_AddChildFromMeta(META, NAME, GRID, &
-                                                   CONFIGFILE, SS, PARENTGC, &
+                                                   CONFIGFILE, SS, procName, sharedObj, PARENTGC, &
                                                    petList, RC)
 
     !ARGUMENTS:
     type(MAPL_MetaComp),           intent(INOUT) :: META
-    character(len=*),              intent(IN   ) :: NAME
+    character(len=*), optional,    intent(IN   ) :: NAME
     type(ESMF_Grid),  optional,    intent(INout) :: GRID
     character(len=*), optional,    intent(IN   ) :: CONFIGFILE
     interface
@@ -3923,7 +3923,8 @@ end subroutine MAPL_DateStampGet
       end subroutine
     end interface
     optional                                     :: SS
-   ! external                                     :: SS
+    character(len=*), optional, intent(in)       :: procName
+    character(len=*), optional, intent(in)       :: sharedObj
     type(ESMF_GridComp), optional, intent(IN   ) :: parentGC
     integer,           optional  , intent(IN   ) :: petList(:)
     integer,           optional  , intent(  OUT) :: rc
@@ -4044,8 +4045,15 @@ end subroutine MAPL_DateStampGet
 ! copy communicator to childs mapl_metacomp
   CHILD_META%comm = META%comm
 
-  call ESMF_GridCompSetServices ( META%GCS(I), SS, RC=status )
-  VERIFY_(STATUS)
+  if(present(sharedObj)) then
+     ASSERT_(present(procName))
+     call ESMF_GridCompSetServices ( META%GCS(I), procName,sharedObj=sharedObj,RC=status )
+          VERIFY_(STATUS)
+  else
+     ASSERT_(present(SS))
+     call ESMF_GridCompSetServices ( META%GCS(I), SS, RC=status )
+     VERIFY_(STATUS)
+  endif
 
   RETURN_(ESMF_SUCCESS)
 end function MAPL_AddChildFromMeta
@@ -4055,11 +4063,11 @@ end function MAPL_AddChildFromMeta
 ! !IIROUTINE: MAPL_AddChildFromGC --- From gc
 
 !INTERFACE:
-recursive integer function MAPL_AddChildFromGC(GC, NAME, SS, petList, configFile, RC)
+recursive integer function MAPL_AddChildFromGC(GC, NAME, SS, procName, sharedObj, petList, configFile, RC)
 
   !ARGUMENTS:
   type(ESMF_GridComp), intent(INOUT) :: GC
-  character(len=*),    intent(IN   ) :: NAME
+  character(len=*), optional,  intent(IN   ) :: NAME
   interface
     subroutine SS(gridcomp, rc)
         use ESMF_CompMod
@@ -4069,7 +4077,9 @@ recursive integer function MAPL_AddChildFromGC(GC, NAME, SS, petList, configFile
     end subroutine
   end interface
   optional                                     :: SS
- ! external                           :: SS
+  character(len=*), optional, intent(in)       :: procName
+  character(len=*), optional, intent(in)       :: sharedObj
+
   integer, optional  , intent(IN   ) :: petList(:)
   character(len=*), optional, intent(IN   ) :: configFile
   integer, optional  , intent(  OUT) :: rc
@@ -4084,13 +4094,11 @@ recursive integer function MAPL_AddChildFromGC(GC, NAME, SS, petList, configFile
   call MAPL_InternalStateRetrieve(GC, META, RC=status)
   VERIFY_(STATUS)
 
-  MAPL_AddChildFromGC = MAPL_AddChildFromMeta(Meta, NAME, SS=SS, PARENTGC = GC, petList=petList, configFile=configFile, RC=status)
+  MAPL_AddChildFromGC = MAPL_AddChildFromMeta(Meta, NAME=NAME, SS=SS, procName=procName, sharedObj=sharedObj, PARENTGC = GC, petList=petList, configFile=configFile, RC=status)
   VERIFY_(STATUS)
 
   RETURN_(ESMF_SUCCESS)
 end function MAPL_AddChildFromGC
-
-
 
 
   subroutine MAPL_AddConnectivityOld ( GC, SHORT_NAME, TO_NAME, &

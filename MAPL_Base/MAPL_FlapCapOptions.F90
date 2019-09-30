@@ -159,7 +159,20 @@ contains
            error=status)
       _VERIFY(status)
 
+      call options%add(switch='--shared_obj', &
+           help='# Root shared lib with setservices', &
+           required=.false., &
+           def='none', &
+           act='store', &
+           error=status)
+      _VERIFY(status)
 
+      call options%add(switch='--proc_name', &
+           help='# name for subroutine setservices in shared_obj', &
+           required=.false., &
+           def='none', &
+           act='store', &
+           error=status)
       _RETURN(_SUCCESS)
 
    end subroutine add_command_line_options
@@ -206,6 +219,12 @@ contains
       
       call this%cli_options%get(val=buffer, switch='--cap_rc', error=status); _VERIFY(status)
       this%cap_rc_file = trim(buffer)
+
+      call this%cli_options%get(val=buffer, switch='--shared_obj', error=status); _VERIFY(status)
+      this%shared_obj = trim(buffer)
+
+      call this%cli_options%get(val=buffer, switch='--proc_name', error=status); _VERIFY(status)
+      this%proc_name = trim(buffer)
 
     end subroutine parse_command_line_arguments
 

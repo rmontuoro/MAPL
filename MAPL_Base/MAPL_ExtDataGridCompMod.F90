@@ -50,7 +50,7 @@
 !
 ! !PUBLIC MEMBER FUNCTIONS:
 
-   PUBLIC SetServices
+!   PUBLIC SetServices
    public T_EXTDATA_STATE
    public EXTDATA_WRAP
 !EOP
@@ -227,7 +227,7 @@ CONTAINS
 !
 ! !INTERFACE:
 
-   SUBROUTINE SetServices ( GC, RC )
+   SUBROUTINE SetServices ( GC, RC ) bind(c, name="ext_setservices")
 
 ! !ARGUMENTS:
 

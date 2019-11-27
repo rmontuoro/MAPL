@@ -22,6 +22,7 @@ module MAPL_FileMetadataUtilsMod
       procedure :: get_level_name
       procedure :: is_var_present
       procedure :: get_file_name
+      procedure :: create_bundle_from_metadata
    end type FileMetadataUtils
 
    interface FileMetadataUtils
@@ -369,6 +370,114 @@ module MAPL_FileMetadataUtilsMod
 
       _RETURN(_SUCCESS)
    end function get_file_name
+
+   function create_bundle_from_metadata(this,grid,variables,rc) result(bundle)
+      class (FileMetadataUtils), intent(inout) :: this
+      type(ESMF_Grid), intent(in), optional :: grid
+      type(StringVector), intent(in), optional :: variables
+      integer, optional, intent(out) :: rc
+      type(ESMF_FieldBundle) :: bundle
+      integer :: status
+      logical :: exists
+
+      type(ESMF_Grid) :: mygrid
+      class (AbstractGridFactory), allocatable :: factory
+      type(StringVectorIterator) :: var_iter
+      character(len=:), pointer :: var_name,attr
+      class (variable), pointer :: var
+      type (StringVariableMap), pointer :: vars
+      type (StringVector) :: writeVars
+      type (StringVectorIterator) :: writeVars_iter
+      type (StringVariableMapIterator) :: vars_iter
+      type (ESMF_Field), allocatable :: fields(:)
+      integer :: lm,j
+      character(len=:), allocatable :: levName
+      type(StringVector), pointer :: dimensions
+      logical :: haveLev
+ 
+      if (present(grid)) then
+         mygrid=grid
+      else
+         inquire(file=trim(this%filename),exist=exists)
+         _ASSERT(exists,trim(this%filename)//" you are trying to make grid from does not exist")
+         allocate(factory, source=grid_manager%make_factory(trim(this%filename)))
+         mygrid = grid_manager%make_grid(factory)
+      end if
+      
+      vars => this%get_variables()
+      if (present(variables)) then
+         var_iter = variables%begin()
+         do while (var_iter /= variables%end())
+            var_name => var_iter%get()
+            var => vars%at(var_name)
+            _ASSERT(associated(var),trim(var_name)//" not found in metadata")
+            call var_iter%next()
+         enddo
+         writeVars=variables
+      else
+         vars_iter = vars%begin()
+         do while (vars_iter /= vars%end())
+            if ( (.not.this%is_coordinate_variable(vars_iter%key())) .and. (trim(vars_iter%key)/='time') ) then
+               call writeVars%push_back(vars_iter%key())
+            end if
+            call vars_iter%next()
+         enddo
+      end if
+
+      ! To do, check grid and file have same number of levels
+      levName = this%get_level_name(rc=status)
+      _VERIFY(status)
+      if (levName /= '') then
+         call this%get_coordinate_info(levName,coordSize=lm,rc=status)
+         _VERIFY(status)
+      else
+         lm=0
+      end if
+      allocate(fields(writeVars%size()),stat=status)
+      _VERIFY(status)
+      writeVars_iter = writeVars%begin()
+      j=0
+      do while (writeVars_iter /= writeVars%end())
+         j=j+1
+         var_name => writeVars_iter%get()
+         var => vars%at(var_name)
+         dimensions => var%get_dimensions()
+         haveLev=.false.
+         do i=1,dimensions%size()
+            haveLev = trim(levName)==trim(dimensions%at(i)) 
+            if (haveLev) exit
+         enddo
+         if (haveLev) then
+            fields(j) = ESMF_FieldCreate(mygrid,typekind=ESMF_TYPEKIND_R4, &
+                        gridToFieldMap=[1,2],ungriddedLBound=[1],ungriddedUBound=[lm], &
+                        name = trim(var_name), rc=status)
+            _VERIFY(status)
+         else
+            fields(j) = ESMF_FieldCreate(mygrid,typekind=ESMF_TYPEKIND_R4, &
+                        gridToFieldMap=[1,2], &
+                        name = trim(var_name), rc=status)
+            _VERIFY(status)
+
+         end if
+         attr => this%get_variable_attribute(trim(var_name),'units',rc=status)
+         _VERIFY(status)
+         if (associated(attr)) then
+            call ESMF_AttributeSet(fields(j),name='units',value=trim(attr),rc=status)
+            _VERIFY(status)
+          end if         
+         attr => this%get_variable_attribute(trim(var_name),'long_name',rc=status)
+         _VERIFY(status)
+         if (associated(attr)) then
+            call ESMF_AttributeSet(fields(j),name='long_name',value=trim(attr),rc=status)
+            _VERIFY(status)
+          end if         
+         call writeVars_iter%next() 
+      enddo
+      bundle = ESMF_FieldBundleCreate(fieldList=fields,rc=status)
+      _VERIFY(status)
+      _RETURN(_SUCCESS)
+
+   end function create_bundle_from_metadata
 
 end module MAPL_FileMetadataUtilsMod
 

@@ -21,6 +21,7 @@ module MAPL_newCFIOMod
   use MAPL_ExtDataCollectionMod
   use MAPL_ExtDataCOllectionManagerMod
   use MAPL_ioClientsMod
+  use MAPL_FileMetaDataUtilsMod
   use, intrinsic :: ISO_C_BINDING
   use, intrinsic :: iso_fortran_env, only: REAL64
   implicit none
@@ -114,13 +115,12 @@ module MAPL_newCFIOMod
         type(newCFIOitem), pointer :: item
         type(stringVector) :: order
         integer :: metadataVarsSize
+        type(FileMetaDataUtils) :: metaUtils
 
         integer :: status
 
         this%items = items
         this%input_bundle = bundle
-        this%output_bundle = ESMF_FieldBundleCreate(rc=status)
-        _VERIFY(status)
         this%timeInfo = timeInfo
         call ESMF_FieldBundleGet(this%input_bundle,grid=input_grid,rc=status)
         _VERIFY(status)
@@ -131,8 +131,6 @@ module MAPL_newCFIOMod
            _VERIFY(status)
         end if
         this%regrid_handle => new_regridder_manager%make_regridder(input_grid,this%output_grid,this%regrid_method,rc=status)
-        _VERIFY(status)
-        call ESMF_FieldBundleSet(this%output_bundle,grid=this%output_grid,rc=status)
         _VERIFY(status)
         factory => get_factory(this%output_grid,rc=status)
         _VERIFY(status)
@@ -181,6 +179,10 @@ module MAPL_newCFIOMod
            call this%alphabatize_variables(metadataVarsSize,rc=status)
            _VERIFY(status)
         end if
+
+        metaUtils=FileMetadataUtils(this%metadata,"NA")
+        this%output_bundle=metaUtils%create_bundle_from_metadata(grid=this%output_grid,rc=status)
+        _VERIFY(status)
        
      end subroutine CreateFileMetaData
 
@@ -292,17 +294,6 @@ module MAPL_newCFIOMod
         call v%add_attribute('valid_range',(/-MAPL_UNDEF,MAPL_UNDEF/))
         call factory%append_variable_metadata(v)
         call this%metadata%add_variable(trim(varName),v)
-        ! finally make a new field if neccessary
-        if (this%doVertRegrid .and. (fieldRank ==3) ) then
-           newField = MAPL_FieldCreate(field,this%output_grid,lm=this%vData%lm,rc=status)
-           _VERIFY(status)
-           call MAPL_FieldBundleAdd(this%output_bundle,newField,rc=status)
-        else
-           newField = MAPL_FieldCreate(field,this%output_grid,rc=status)
-           _VERIFY(status)
-           call MAPL_FieldBundleAdd(this%output_bundle,newField,rc=status)
-        end if
-        
 
      end subroutine CreateVariable
 

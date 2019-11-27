@@ -413,8 +413,7 @@ module MAPL_VerticalDataMod
                  call v%add_attribute('units',ungridded_unit)
                  call v%add_attribute('standard_name',ungridded_name)
                  call v%add_attribute('coordinate','N/A')
-                 call v%add_const_value(UnlimitedEntity(this%levs))
-                 call metadata%add_variable('lev',v,rc=status)
+                 call metadata%add_variable('lev',CoordinateVariable(v,this%levs),rc=status)
               else 
                  call metadata%add_dimension('lev', lm, rc=status)
                  v = Variable(PFIO_REAL64, dimensions='lev')
@@ -423,8 +422,7 @@ module MAPL_VerticalDataMod
                  call v%add_attribute('positive','down')
                  call v%add_attribute('coordinate','eta')
                  call v%add_attribute('standard_name','model_layer')
-                 call v%add_const_value(UnlimitedEntity(this%levs))
-                 call metadata%add_variable('lev',v,rc=status)
+                 call metadata%add_variable('lev',CoordinateVariable(v,this%levs),rc=status)
               end if
 
            else if (this%regrid_type == VERTICAL_METHOD_ETA2LEV .or. this%regrid_type == VERTICAL_METHOD_SELECT) then
@@ -439,7 +437,6 @@ module MAPL_VerticalDataMod
               end if
               call v%add_attribute('coordinate','eta')
               call v%add_attribute('standard_name','model_layer')
-              call v%add_const_value(UnlimitedEntity(this%levs))
               call metadata%add_dimension('lev', lm, rc=status)
               v = Variable(PFIO_REAL64, dimensions='lev')
               call v%add_attribute('long_name','vertical level')
@@ -447,8 +444,7 @@ module MAPL_VerticalDataMod
               call v%add_attribute('positive','down')
               call v%add_attribute('coordinate','eta')
               call v%add_attribute('standard_name','model_layer')
-              call v%add_const_value(UnlimitedEntity(this%levs))
-              call metadata%add_variable('lev',v,rc=status)
+              call metadata%add_variable('lev',CoordinateVariable(v,this%levs),rc=status)
            end if
         end if
 

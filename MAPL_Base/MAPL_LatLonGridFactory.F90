@@ -1645,14 +1645,12 @@ contains
       v = Variable(PFIO_REAL32, dimensions='lon')
       call v%add_attribute('long_name', 'longitude')
       call v%add_attribute('units', 'degrees_east')
-      call v%add_const_value(UnlimitedEntity(MAPL_RADIANS_TO_DEGREES*this%get_longitudes()))
-      call metadata%add_variable('lon', v)
+      call metadata%add_variable('lon', CoordinateVariable(v,MAPL_RADIANS_TO_DEGREES*this%get_longitudes()))
 
       v = Variable(PFIO_REAL32, dimensions='lat')
       call v%add_attribute('long_name', 'latitude')
       call v%add_attribute('units', 'degrees_north')
-      call v%add_const_value(UnlimitedEntity(MAPL_RADIANS_TO_DEGREES*this%get_latitudes()))
-      call metadata%add_variable('lat', v)
+      call metadata%add_variable('lat', CoordinateVariable(v,MAPL_RADIANS_TO_DEGREES*this%get_latitudes()))
 
    end subroutine append_metadata
 

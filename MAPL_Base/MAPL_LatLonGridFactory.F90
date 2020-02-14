@@ -55,6 +55,8 @@ module MAPL_LatLonGridFactoryMod
       ! Used for halo
       type (ESMF_DELayout) :: layout
       integer :: px, py
+      ! Half polar cell for ModelE
+      logical :: half_polar_cell
    contains
       procedure :: make_new_grid
       procedure :: create_basic_grid
@@ -88,6 +90,7 @@ module MAPL_LatLonGridFactoryMod
       module procedure set_with_default_real
       module procedure set_with_default_character
       module procedure set_with_default_range
+      module procedure set_with_default_logical
    end interface set_with_default
 
 
@@ -96,7 +99,7 @@ contains
 
    function LatLonGridFactory_from_parameters(unusable, grid_name, &
         & im_world, jm_world, lm, nx, ny, ims, jms, &
-        & pole, dateline, lon_range, lat_range, rc) result(factory)
+        & pole, dateline, lon_range, lat_range, half_polar_cell,rc) result(factory)
       type (LatLonGridFactory) :: factory
       class (KeywordEnforcer), optional, intent(in) :: unusable
       character(len=*), optional, intent(in) :: grid_name
@@ -109,6 +112,7 @@ contains
       character(len=2), optional, intent(in) :: dateline
       type (RealMinMax), optional, intent(in) :: lon_range
       type (RealMinMax), optional, intent(in) :: lat_range
+      logical, optional, intent(in) :: half_polar_cell
 
       ! decomposition:
       integer, optional, intent(in) :: nx
@@ -141,6 +145,8 @@ contains
 
       call set_with_default(factory%lon_range, lon_range, RealMinMax(UNDEFINED_REAL,UNDEFINED_REAL))
       call set_with_default(factory%lat_range, lat_range, RealMinMax(UNDEFINED_REAL,UNDEFINED_REAL))
+
+      call set_with_default(factory%half_polar_cell,half_polar_cell,.false.)
 
       call factory%check_and_fill_consistency(rc=status)
       _VERIFY(status)
@@ -338,8 +344,13 @@ contains
          end select
       end if
 
-      latitudes = MAPL_Range(min_coord, max_coord, this%jm_world, &
-           & conversion_factor=MAPL_DEGREES_TO_RADIANS, rc=status)
+      if (this%pole/='ME') then
+         latitudes = MAPL_Range(min_coord, max_coord, this%jm_world, &
+              & conversion_factor=MAPL_DEGREES_TO_RADIANS, rc=status)
+      else
+         latitudes = compute_modele_center_lats(this%half_polar_cell,this%jm_world,&
+              conversion_factor=MAPL_DEGREES_TO_RADIANS,rc=status)
+      end if
 
       _RETURN(_SUCCESS)
    end function get_latitudes
@@ -381,8 +392,13 @@ contains
          end select
       end if
 
-      clatitudes = MAPL_Range(min_coord, max_coord, this%jm_world+1, &
-           & conversion_factor=MAPL_DEGREES_TO_RADIANS, rc=status)
+      if (this%pole/='ME') then
+         clatitudes = MAPL_Range(min_coord, max_coord, this%jm_world+1, &
+              & conversion_factor=MAPL_DEGREES_TO_RADIANS, rc=status)
+      else
+         clatitudes = compute_modele_corner_lats(this%half_polar_cell,this%jm_world+1,&
+              conversion_factor=MAPL_DEGREES_TO_RADIANS,rc=status)
+      end if
       if (this%pole == 'PC') then
          clatitudes(1)=-90.d0*MAPL_DEGREES_TO_RADIANS
          clatitudes(this%jm_world+1)=90.d0*MAPL_DEGREES_TO_RADIANS
@@ -498,7 +514,7 @@ contains
 
       call ESMF_VmGetCurrent(VM, rc=status)
       _VERIFY(status)
-      
+     
       call ESMF_ConfigGetAttribute(config, tmp, label=prefix//'GRIDNAME:', default=GRID_NAME_DEFAULT)
       this%grid_name = trim(tmp)
 
@@ -535,6 +551,8 @@ contains
     
       call get_range(this%lon_range, 'LON_RANGE:', rc=status); _VERIFY(status)
       call get_range(this%lat_range, 'LAT_RANGE:', rc=status); _VERIFY(status)
+
+      call ESMF_ConfigGetAttribute(config,this%half_polar_cell,label=prefix//'HALF_POLAR_CELL:',default=.false.,rc=status)
       
       call this%check_and_fill_consistency(rc=status); _VERIFY(status)
 
@@ -782,6 +800,19 @@ contains
       end if
       
    end subroutine set_with_default_character
+
+   subroutine set_with_default_logical(to, from, default)
+      logical, intent(out) :: to
+      logical, optional, intent(in) :: from
+      logical, intent(in) :: default
+      
+      if (present(from)) then
+         to = from
+      else
+         to = default
+      end if
+      
+   end subroutine set_with_default_logical
 
 
    elemental subroutine set_with_default_range(to, from, default)
@@ -1153,6 +1184,86 @@ contains
 
 
    end subroutine halo
+
+   function compute_modele_center_lats(half_polar_cell,n,conversion_factor,rc) result(new_lats)
+      real(kind=REAL64), allocatable :: new_lats(:)
+      logical, intent(in) :: half_polar_cell
+      integer, intent(in) :: n
+      real(kind=REAL64), optional, intent(in) :: conversion_factor
+      integer, optional, intent(out) :: rc
       
+      real(kind=REAL64) :: xmin,xmax,dx,halfdx
+      integer :: i
+ 
+      allocate(new_lats(n))
+      xmin = -90.0
+      xmax =  90.0
+      if (half_polar_cell) then
+         dx = (xmax-xmin)/(n-1)
+         halfdx = dx/2.0
+      else
+         dx = (xmax-xmin)/n
+      end if
+
+     
+      if (half_polar_cell) then
+         do i=1,n
+            new_lats(i) = xmin + halfdx/2.0 + (i-1)*dx
+         enddo
+      else
+         do i=1,n
+            new_lats(i) = xmin + dx/2.0 + (i-1)*dx
+         enddo
+      end if
+ 
+      if (present(conversion_factor)) then
+          new_lats = new_lats * conversion_factor
+      end if
+      _RETURN(ESMF_SUCCESS)
+
+   end function compute_modele_center_lats
+      
+
+   function compute_modele_corner_lats(half_polar_cell,n,conversion_factor,rc) result(new_lats)
+      real(kind=REAL64), allocatable :: new_lats(:)
+      logical, intent(in) :: half_polar_cell
+      integer, intent(in) :: n
+      real(kind=REAL64), optional, intent(in) :: conversion_factor
+      integer, optional, intent(out) :: rc
+      
+      real(kind=REAL64) :: xmin,xmax,dx,halfdx
+      integer :: i
+ 
+      allocate(new_lats(n))
+      xmin = -90.0
+      xmax =  90.0
+      if (half_polar_cell) then
+         dx = (xmax-xmin)/(n-1)
+         halfdx = dx/2.0
+      else
+         dx = (xmax-xmin)/n
+      end if
+
+     
+      if (half_polar_cell) then
+         do i=1,n
+            if (i==1) then
+               new_lats(i) = xmin
+            else
+               new_lats(i) = xmin + halfdx + (i-2)*dx
+            end if
+         enddo
+      else
+         do i=1,n
+            new_lats(i) = xmin + (i-1)*dx
+         enddo
+      end if
+ 
+      if (present(conversion_factor)) then
+          new_lats = new_lats * conversion_factor
+      end if
+      _RETURN(ESMF_SUCCESS)
+
+   end function compute_modele_corner_lats
 
 end module MAPL_LatLonGridFactoryMod

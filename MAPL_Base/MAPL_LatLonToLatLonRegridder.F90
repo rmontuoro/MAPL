@@ -6,6 +6,7 @@
 #include "unused_dummy.H"
 
 module MAPL_LatLonToLatLonRegridderMod
+   use MAPL_BaseMod, only: MAPL_UNDEF
    use MAPL_AbstractRegridderMod
    use MAPL_GridSpecMod
    use MAPL_RegridderSpecMod
@@ -81,6 +82,7 @@ contains
       real(kind=REAL32), intent(in) :: Xin(:)
       real(kind=REAL32), intent(in) :: Xout(:)
       integer, optional, intent(out) :: rc
+      real(kind=REAL32), allocatable :: Xout_tmp(:)
       
       ! Compute weights for binned interpolation along a dimension.
       ! Xout are the N_in + 1 input bin edges.
@@ -95,20 +97,32 @@ contains
 
       N_in  = size(Xin )
 
+      Xout_tmp = Xout
+
       do j_out=1,size(Weight)
-         j0 = 1
+         j0 = 0
          do
             if(Xout(j_out  ) <= Xin(j0+1)) exit
             j0=j0+1
-            _ASSERT(j0 < N_in )
+            if( j0 == N_in) exit
          end do
+         ! xout(j_oit) is smaller than xin(1)
+         if(j0 == 0) then
+            j0 = 1
+            Xout_tmp(j_out) = Xin(1)
+         endif
+         ! xout(j_out) is bigger than xin(Nin)
+         if(j0 == N_in) then
+            j0 = N_in-1
+            Xout_tmp(j_out) = Xin(N_in)
+         endif
          j1 = j0 + 1
 
          allocate(weight(j_out)%f(j0:j1), stat=status)
          _VERIFY(status)
 
          associate (b => weight(j_out)%f)
-           b(j0  ) = (Xin(j1)-Xout(j_out))/(Xin(j1)-Xin(j0))
+           b(j0  ) = (Xin(j1)-Xout_tmp(j_out))/(Xin(j1)-Xin(j0))
            b(j0+1) = 1.0 - b(j0)
          end associate
          
@@ -282,9 +296,11 @@ contains
       integer :: j
       integer :: jj, jx, ix, ii
       real :: q, w, f
-
+      character(*), parameter :: Iam=" apply_weights_real32"
       real(kind=REAL32) :: undef
-      undef = -HUGE(1.)
+
+      !undef = HUGE(1.)
+      undef = MAPL_UNDEF
 
       do j = 1, this%num_points_out(2)
          associate(weights_y => this%mappings(2)%WeightList(j)%f)
@@ -309,7 +325,7 @@ contains
                       else
                          ix = ii
                       end if
-                      
+
                       if(q_in(ix,jx) /= undef) then
                          f = weights_x(ii) *  weights_y(jj)
                          q = q + f*q_in(ix,jx)
@@ -539,7 +555,6 @@ contains
          else if (spec%regrid_method == REGRID_METHOD_CONSERVE) then
             stagger=.true.
          end if
-
          dimspec%x_min=xMinIn
          dimspec%x_max=xMaxIn
          dimspec%num_points = this%num_points_in(dim)
@@ -564,13 +579,15 @@ contains
             end if
 !!$            _ASSERT(abs( (rngIn-rngOut)/rngIn ) < 1.e-5)
             if(xf_out(1) < xf_in(1)) then
-               xf_out  = xf_out + int((xf_in(1)-xf_out(1))/rngIn+(MAPL_PI_R8/180.0d0))*rngIn
+               xf_out  = xf_out + int((xf_in(1)-xf_out(1))/rngIn+1)*rngIn
             else
                xf_out  = xf_out + int((xf_in(1)-xf_out(1))/rngIn)*rngIn
             end if
+            _ASSERT(xf_in(size(xf_in)) >= xf_out(size(xf_out)))
+            _ASSERT(xf_in(1) <= xf_out(1))
          end if
-         _ASSERT(xf_in(size(xf_in)) >= xf_out(size(xf_out)))
-         _ASSERT(xf_in(1) <= xf_out(1))
+        ! _ASSERT(xf_in(size(xf_in)) >= xf_out(size(xf_out)))
+        ! _ASSERT(xf_in(1) <= xf_out(1))
          select case (spec%regrid_method)
          case (REGRID_METHOD_BILINEAR)
             call compute_linear_weights(this%mappings(dim)%WeightList, xf_in, xf_out, rc=status)

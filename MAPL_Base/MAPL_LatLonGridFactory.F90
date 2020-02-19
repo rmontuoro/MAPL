@@ -713,7 +713,7 @@ contains
          _ASSERT(this%lon_range%max == UNDEFINED_REAL)
          _ASSERT(this%lat_range%min == UNDEFINED_REAL)
          _ASSERT(this%lon_range%max == UNDEFINED_REAL)
-         _ASSERT(any(this%pole == ['PE', 'PC']))
+         _ASSERT(any(this%pole == ['ME','PE', 'PC']))
          _ASSERT(any(this%dateline == ['DC', 'DE', 'GC']))
       end if
 

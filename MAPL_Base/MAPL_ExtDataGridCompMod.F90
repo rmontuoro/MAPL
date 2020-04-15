@@ -476,6 +476,8 @@ CONTAINS
     end if
 
     if (.not.self%active) then
+       call MAPL_TimerOff(MAPLSTATE,"Initialize")
+       call MAPL_TimerOff(MAPLSTATE,"TOTAL")
        _RETURN(ESMF_SUCCESS)
     end if
 

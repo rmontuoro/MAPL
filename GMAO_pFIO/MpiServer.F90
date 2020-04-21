@@ -26,12 +26,13 @@ module pFIO_MpiServerMod
 
 contains
 
-   function new_MpiServer(comm, port_name) result(s)
+   function new_MpiServer(comm, port_name, nwriters) result(s)
       type (MpiServer) :: s
       integer, intent(in) :: comm
       character(*), intent(in) :: port_name
+      integer, optional, intent(in) :: nwriters
 
-      call s%init(comm)
+      call s%init(comm, nwriters = nwriters)
 
       s%port_name = trim(port_name)
       s%threads = ServerThreadVector()
@@ -63,7 +64,7 @@ contains
             !handle the message
             call thread_ptr%run()
             !delete the thread object if it terminates 
-            if(thread_ptr%do_terminate()) then
+            if(thread_ptr%IsTerminate()) then
                mask(i) = .true.
             endif
          enddo
@@ -73,6 +74,7 @@ contains
       enddo
 
       call this%threads%clear()
+      call this%terminate_writers()
       deallocate(mask)
 
    end subroutine start

@@ -62,7 +62,7 @@ contains
          allocate(threadPtr,source = ServerThread(sckt,this))
          do while (.true.)
             call threadPtr%run()
-            if(threadPtr%do_terminate()) then
+            if(threadPtr%IsTerminate()) then
                deallocate(threadPtr)
                exit
             endif

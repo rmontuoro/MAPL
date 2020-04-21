@@ -48,6 +48,7 @@ module pFIO_BaseServerMod
       procedure :: clear_RequestHandle
       procedure :: get_dmessage ! get done or dummy message
       procedure :: set_collective_request ! 
+      procedure :: send_DataToWriter ! 
 
    end type BaseServer
 
@@ -79,6 +80,51 @@ contains
      _RETURN(_SUCCESS)
    end subroutine receive_output_data
 
+   subroutine send_DataToWriter(this, rc)
+     class (BaseServer),target, intent(inout) :: this
+     integer, optional, intent(out) :: rc
+
+     integer ::  n
+     type (ServerThread),pointer :: threadPtr
+     class (AbstractMessage),pointer :: msg
+     type (MessageVectorIterator) :: iter
+     type (StringInteger64MapIterator) :: request_iter
+     integer,pointer :: i_ptr(:)
+     type(c_ptr) :: offset_address
+     integer :: collection_counter
+     class (AbstractDataReference), pointer :: dataRefPtr
+     class (RDMAReference), pointer :: remotePtr
+     integer(kind=MPI_ADDRESS_KIND) :: offset, msize
+
+     integer :: writer_rank, bsize
+     integer :: command, ierr, MPI_STAT(MPI_STATUS_SIZE)
+     integer, allocatable :: buffer(:)
+
+     command = 1
+
+    
+     if (this%threads%size() == 0) return
+
+     threadPtr=>this%threads%at(1)
+
+     if (threadPtr%request_backlog%size()== 0) return
+
+     call serialize_message_vector(threadPtr%request_backlog, buffer)
+     bsize = size(buffer)
+
+     if( this%rank == 5) then
+          call MPI_send(command, 1, MPI_INTEGER, 0, pFIO_s_tag, this%Inter_Comm, ierr)
+          call MPI_recv(writer_rank, 1, MPI_INTEGER, &
+               0, pFIO_s_tag, this%Inter_Comm , &
+               MPI_STAT, ierr)
+     print*, " I am server get this worker: ", writer_rank 
+       call MPI_send(bsize, 1, MPI_INTEGER, writer_rank, pFIO_s_tag, this%Inter_Comm, ierr)
+       call MPI_send(buffer, bsize, 1, MPI_INTEGER, writer_rank, pFIO_s_tag, this%Inter_Comm, ierr)
+     endif
+
+     _RETURN(_SUCCESS)
+   end subroutine send_dataToWriter
+
    subroutine put_DataToFile(this, rc)
      class (BaseServer),target, intent(inout) :: this
      integer, optional, intent(out) :: rc
@@ -96,7 +142,7 @@ contains
      integer(kind=MPI_ADDRESS_KIND) :: offset, msize
  
      !real(KIND=REAL64) :: t0, t1
-
+call this%send_dataToWriter()
      !t0 = 0.0d0
      !t1 = -1.0d0
      do n= 1, this%threads%size()

@@ -159,7 +159,7 @@ contains
            integer :: rank, ierror
            call MPI_Comm_rank(this%comm_world, rank, ierror)
            if (rank == 0) then
-             print*,__FILE__,__LINE__,'stop called on non-bottom timer'//name
+             print*,__FILE__,__LINE__,'stop called on non-bottom timer: '//name // "should be : "// node%get_name()
            end if
          end block
          return

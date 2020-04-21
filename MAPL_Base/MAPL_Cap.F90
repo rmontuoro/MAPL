@@ -259,7 +259,7 @@ contains
      do i = 1, this%cap_options%n_oserver_group
         
         if ( trim(s_name) =='o_server'//trim(i_to_string(i)) ) then
-           allocate(this%o_server, source = MpiServer(this%split_comm%get_subcommunicator(), s_name))
+           allocate(this%o_server, source = MpiServer(this%split_comm%get_subcommunicator(), s_name, nwriters = 4))
            call this%directory_service%publish(PortInfo(s_name,this%o_server), this%o_server)
            call this%directory_service%connect_to_client(s_name, this%o_server)
            call MPI_Comm_Rank(this%split_comm%get_subcommunicator(),rank,status)

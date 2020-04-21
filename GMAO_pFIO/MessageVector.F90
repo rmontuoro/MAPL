@@ -25,19 +25,19 @@ contains
   subroutine serialize_message_vector(msgVec,buffer)
      type (MessageVector),intent(in) :: msgVec
      integer, allocatable,intent(inout) :: buffer(:)
-     integer, allocatable :: tmp(:)
      class (AbstractMessage),pointer :: msg
      integer :: n, i
      type (ProtocolParser) :: parser
 
      n = msgVec%size()
      parser = ProtocolParser()
-     allocate(tmp(0))
+     
+     if (allocated(buffer)) deallocate(buffer)
+     allocate(buffer(0))
      do i = 1, n
         msg=>msgVec%at(i)
-        tmp =[tmp, parser%encode(msg)]
+        buffer =[buffer, parser%encode(msg)]
      enddo
-     buffer = tmp
 
   end subroutine
 

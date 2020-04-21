@@ -130,6 +130,11 @@ if (LATEX_FOUND)
 #  add_subdirectory (TeX)
 endif ()
 
+ecbuild_add_executable (
+  TARGET pfio_writer.x
+  SOURCES pfio_writer.F90
+  LIBS ${this} ${NETCDF_LIBRARIES}  MPI::MPI_Fortran)
+set_target_properties (pfio_writer.x PROPERTIES Fortran_MODULE_DIRECTORY ${include_${this}})
 
 # Unit testing
 if (PFUNIT_FOUND)

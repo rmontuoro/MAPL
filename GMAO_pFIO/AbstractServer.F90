@@ -27,6 +27,8 @@ module pFIO_AbstractServerMod
       integer :: rank   ! rank in all server processes
       integer :: npes   ! number of processes of the server
       integer :: status ! counter, UNALLOCATED, PENDING
+      integer :: nwriters ! number of nc4 writers to be spawned
+
       logical :: all_backlog_is_empty = .true. 
       integer :: num_clients = 0
       logical :: terminate
@@ -36,6 +38,7 @@ module pFIO_AbstractServerMod
       integer :: NodeRoot_Comm! communicator of server nodes' roots
       integer :: Node_Num     ! number of server nodes
       integer :: Node_Rank    ! rank of server nodes
+      integer :: Inter_Comm   ! communiator with spawned children for writing
 
       ! save info about which process belongs to which node 
       ! all processes keep this info
@@ -70,6 +73,7 @@ module pFIO_AbstractServerMod
       procedure :: get_writing_PE
       procedure :: distribute_task
       procedure :: get_communicator
+      procedure :: terminate_writers
 
    end type AbstractServer
 
@@ -104,9 +108,11 @@ module pFIO_AbstractServerMod
 
 contains
 
-   subroutine init(this,comm)
+   subroutine init(this,comm, nwriters, rc)
       class (AbstractServer),intent(inout) :: this
       integer, intent(in) :: comm
+      integer, optional, intent(in) :: nwriters
+      integer, optional, intent(out) :: rc
 
       integer :: ierror, MyColor
 
@@ -141,6 +147,18 @@ contains
 
       call Mpi_AllGather(this%Node_Rank,  1, MPI_INTEGER, &
                          this%Node_Ranks, 1, MPI_INTEGER, comm,ierror)
+
+      this%nwriters = 0
+      this%Inter_Comm = MPI_COMM_NULL
+
+      if(present(nwriters)) this%nwriters = nwriters
+
+      if (this%nwriters == 0) return
+  
+      _ASSERT(this%nwriters > 1 ,' nwriters should be >=2. pfio_writer.x has master-slave structure')
+
+      call MPI_Comm_spawn("./pfio_writer.x", MPI_ARGV_NULL, this%nwriters, MPI_INFO_NULL, 0, &
+                   this%comm, this%Inter_Comm, MPI_ERRCODES_IGNORE, ierror)
 
    end subroutine init
 
@@ -388,5 +406,18 @@ contains
       communicator = this%comm
 
    end function get_communicator
+
+   subroutine terminate_writers(this)
+      class (AbstractServer), intent(inout) :: this
+      integer :: terminate = -1
+      integer :: ierr
+
+      ! The root rank sends termination signal to the root of the spawned children which would 
+      !      send the termination signal to its writing workers
+      if( this%rank == 0 .and. this%nwriters > 1 ) then
+        call MPI_send(terminate, 1, MPI_INTEGER, 0, pFIO_s_tag, this%Inter_Comm, ierr)
+      endif
+
+   end subroutine terminate_writers
 
 end module pFIO_AbstractServerMod

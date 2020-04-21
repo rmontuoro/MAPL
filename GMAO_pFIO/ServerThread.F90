@@ -78,7 +78,7 @@ module pFIO_ServerThreadMod
       procedure :: set_terminate
       procedure :: set_rank
       procedure :: set_collective_request
-      procedure :: do_terminate
+      procedure :: IsTerminate
       procedure :: clear_terminate
 
       procedure :: handle_Terminate
@@ -802,10 +802,10 @@ contains
       this%terminate = .false.
    end subroutine clear_terminate
 
-   logical function do_terminate(this)
+   logical function IsTerminate(this)
       class (ServerThread), intent(in) :: this
-      do_terminate = this%terminate
-   end function do_terminate
+      IsTerminate = this%terminate
+   end function IsTerminate
 
    subroutine get_DataFromFile(this,message,address, rc)
       class (ServerThread), intent(inout)    :: this
@@ -946,7 +946,7 @@ contains
 
       hist_collection=>this%hist_collections%at(message%collection_id)
       formatter =>hist_collection%find(message%file_name)
-       
+      print*, message%file_name, message%var_name 
       select type (message)
       type is (StageDataMessage)
         start = message%start
@@ -1000,6 +1000,84 @@ contains
 
        _RETURN(_SUCCESS)
    end subroutine put_DataToFile
+
+   subroutine send_DataToFile(this, message, address, rc)
+      class (ServerThread), intent(inout)    :: this
+      class (AbstractDataMessage), intent(in) ::  message
+      integer, optional, intent(out) :: rc
+
+      type (c_ptr), intent(in) :: address
+
+      type (NetCDF4_FileFormatter),pointer :: formatter
+      type (HistoryCollection),pointer :: hist_collection
+
+      integer(kind=INT32), pointer :: values_int32_0d
+      integer(kind=INT32), pointer :: values_int32_1d(:)
+      integer(kind=INT64), pointer :: values_int64_0d
+      integer(kind=INT64), pointer :: values_int64_1d(:)
+      real(kind=REAL32), pointer :: values_real32_0d
+      real(kind=REAL32), pointer :: values_real32_1d(:)
+      real(kind=REAL64), pointer :: values_real64_0d
+      real(kind=REAL64), pointer :: values_real64_1d(:)
+
+      integer, allocatable :: start(:),count(:)
+
+      hist_collection=>this%hist_collections%at(message%collection_id)
+      formatter =>hist_collection%find(message%file_name)
+       
+      select type (message)
+      type is (StageDataMessage)
+        start = message%start
+        start = 1
+        count = message%count
+      type is (CollectiveStageDataMessage)
+
+        start = message%global_start
+        count = message%global_count
+
+      class default
+        _ASSERT(.false., "wrong StageDataMessage type")
+      end select
+!      if (product(count) /= product(file_data_reference%shape)) stop "memory size not match"
+      select case (size(count)) ! rank
+      case (0)
+          select case (message%type_kind)
+          case (pFIO_INT32)
+              call c_f_pointer(address, values_int32_0d)
+              call formatter%put_var(message%var_name, values_int32_0d)
+          case (pFIO_INT64)
+              call c_f_pointer(address, values_int64_0d)
+              call formatter%put_var(message%var_name, values_int64_0d)
+          case (pFIO_REAL32)
+              call c_f_pointer(address, values_real32_0d)
+              call formatter%put_var(message%var_name, values_real32_0d)
+          case (pFIO_REAL64)
+              call c_f_pointer(address, values_real64_0d)
+              call formatter%put_var(message%var_name, values_real64_0d)
+          case default
+              _ASSERT(.false., "not supported type")
+          end select
+      case (1:)
+          select case (message%type_kind)
+          case (pFIO_INT32)
+              call c_f_pointer(address, values_int32_1d, [product(count)])
+              call formatter%put_var(message%var_name, values_int32_1d, start=start, count=count)
+          case (pFIO_INT64)
+              call c_f_pointer(address, values_int64_1d, [product(count)])
+              call formatter%put_var(message%var_name, values_int64_1d, start=start, count=count)
+          case (pFIO_REAL32)
+              call c_f_pointer(address, values_real32_1d, [product(count)])
+              call formatter%put_var(message%var_name, values_real32_1d, start=start, count=count)
+          case (pFIO_REAL64)
+              call c_f_pointer(address, values_real64_1d, [product(count)])
+              call formatter%put_var(message%var_name, values_real64_1d, start=start, count=count)
+          case default
+              _ASSERT(.false., "not supported type")
+          end select
+       end select
+
+       _RETURN(_SUCCESS)
+   end subroutine send_DataToFile
 
    subroutine receive_output_data(this, rc)
      class (ServerThread),target,intent(inout) :: this

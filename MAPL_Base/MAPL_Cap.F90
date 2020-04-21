@@ -18,6 +18,9 @@ module MAPL_CapMod
    use MAPL_Profiler
    use MAPL_ioClientsMod
    use MAPL_CapOptionsMod
+   use pflogger, only: initialize_pflogger => initialize
+   use pflogger, only: logging
+   use pflogger, only: Logger
    implicit none
    private
 
@@ -89,6 +92,7 @@ contains
       class ( MAPL_CapOptions), optional, intent(in) :: cap_options
       integer, optional, intent(out) :: rc
       integer :: status
+      type(Logger), pointer :: lgr
 
       cap%name = name
       cap%set_services => set_services
@@ -107,8 +111,17 @@ contains
       endif
 
       call cap%initialize_mpi(rc=status)
-
       _VERIFY(status)
+
+      call initialize_pflogger()
+      if (cap%cap_options%logging_config /= '') then
+         call logging%load_file(cap%cap_options%logging_config)
+      else
+         if (cap%rank == 0) then
+            lgr => logging%get_logger('MAPL')
+            call lgr%warning('No configure file specified for logging layer.  Using defaults.')
+         end if
+      end if
 
       _RETURN(_SUCCESS)     
       _UNUSED_DUMMY(unusable)
@@ -536,7 +549,7 @@ contains
 
          if (my_rank == 0) then
                report_lines = reporter%generate_report(t_p)
-               write(*,'(a,1x,i0)')'Report on process: ', rank
+               write(*,'(a,1x,i0)')'Report on process: ', my_rank
                do i = 1, size(report_lines)
                   write(*,'(a)') report_lines(i)
                end do
@@ -650,10 +663,20 @@ contains
       class (KeywordEnforcer), optional, intent(in) :: unusable
       integer, optional, intent(out) :: rc
 
-      integer :: ierror
+      integer :: ierror, local_comm_world
       _UNUSED_DUMMY(unusable)
 
       if (.not. this%mpi_already_initialized) then
+#ifdef BUILD_TYPE_IS_NOT_DEBUG
+         ! MPT 2.17 has a bug with its interface to MPI_Comm_set_errhandler
+         ! defining comm as inout instead of in.
+         local_comm_world = this%comm_world
+         ! Intel MPI at NCCS seems to have spurious MPI_Finalize errors that do
+         ! not affect the answer or even the finalize step. This call suppresses
+         ! the errors.
+         call MPI_Comm_set_errhandler(local_comm_world,MPI_ERRORS_RETURN,ierror)
+         _VERIFY(ierror)
+#endif
          call MPI_Finalize(ierror)
          _VERIFY(ierror)
       end if

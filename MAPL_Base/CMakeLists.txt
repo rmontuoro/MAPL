@@ -66,7 +66,9 @@ set (srcs
   FileMetadataUtilities.F90 FileMetadataUtilitiesVector.F90
   )
 
-esma_add_library(${this} SRCS ${srcs} DEPENDENCIES MAPL_Profiler GMAO_pFIO MAPL_cfio_r4 gftl-shared FLAP::FLAP MPI::MPI_Fortran)
+esma_add_library(
+  ${this} SRCS ${srcs}
+  DEPENDENCIES MAPL_Profiler GMAO_pFIO MAPL_cfio_r4 pflogger gftl-shared FLAP::FLAP MPI::MPI_Fortran)
 target_compile_options (${this} PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:${OpenMP_Fortran_FLAGS}>)
 if(DISABLE_GLOBAL_NAME_WARNING)
    target_compile_options (${this} PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:${DISABLE_GLOBAL_NAME_WARNING}>)
@@ -74,6 +76,10 @@ endif()
 target_compile_definitions (${this} PRIVATE TWO_SIDED_COMM MAPL_MODE)
 target_include_directories (${this} PRIVATE ${MAPL_SOURCE_DIR}/include)
 
+
+if (NOT (CMAKE_BUILD_TYPE MATCHES Debug))
+   target_compile_definitions(${this} PRIVATE BUILD_TYPE_IS_NOT_DEBUG)
+endif ()
 
 # Kludge for OSX security and DYLD_LIBRARY_PATH ...
 foreach(dir ${OSX_EXTRA_LIBRARY_PATH})

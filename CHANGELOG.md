@@ -8,10 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+### Fixed
+
+- Workaround for MPT 2.17 build bug with `MPI_Comm_set_errhandler`
+
+### Removed
+### Added
+
+## [2.1.0]  2020-04-16
+
+### Changed
 
 - Corrected handling of Equation of Time in orbit (off by default)
 - Made ASSERT in ExtData more explicit in case of missing variables.
 - (re) Introduced MAPL Profiling package
+- Improved diagnostic message in HistoryGridComp for misspelled fields/bundles
 - Removed CVS keywords
 
 ### Fixed
@@ -22,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Implemented workaround to cmake error that happens when building tests in parallel.	
 - Set correct ESMA_env tag in `components.yaml`
 - Updated `components.yaml` to be inline with GEOSgcm
+- Minor problem in GMAO_pFIO Cmakelists (consistency with PRIVATE)
 
 ### Removed
 
@@ -37,8 +49,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add precession of equinox (not on by default)
 - Imported Python/MAPL subdir (old, but never imported to GitHub)
 - Python automatic code generator for grid comp include files	
+- Added support to use pFlogger for logging
+  - Command line option: --logging_config=<file>
 
-	
+## [2.0.6] - 2020-04-15
+
+### Fixed
+
+- Added code to suppress (seemingly) spurious MPI_Finalize errors at end
+  of model run. Suppression does not happen if built with
+  `-DCMAKE_BUILD_TYPE=Debug`
+
 ## [2.0.5] - 2020-04-13
 
 ### Fixed

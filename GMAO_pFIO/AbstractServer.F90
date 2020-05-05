@@ -156,7 +156,6 @@ contains
       if (this%nwriters == 0) return
   
       _ASSERT(this%nwriters > 1 ,' nwriters should be >=2. pfio_writer.x has master-slave structure')
-
       call MPI_Comm_spawn("./pfio_writer.x", MPI_ARGV_NULL, this%nwriters, MPI_INFO_NULL, 0, &
                    this%comm, this%Inter_Comm, MPI_ERRCODES_IGNORE, ierror)
 

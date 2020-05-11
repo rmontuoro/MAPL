@@ -3,6 +3,7 @@
 
 module pFIO_MpiMutexMod
    use mpi
+   use universal_interface
    use iso_fortran_env, only: INT64
    use iso_c_binding, only: c_ptr, c_f_pointer, c_sizeof
    implicit none
@@ -10,7 +11,7 @@ module pFIO_MpiMutexMod
 
    public :: MpiMutex
 
-   type :: MpiMutex
+   type, extends(universal) :: MpiMutex
       private
       integer :: comm
       integer :: npes
@@ -22,7 +23,7 @@ module pFIO_MpiMutexMod
    contains
       procedure :: acquire
       procedure :: release
-      procedure :: free_mpi_resources
+      procedure :: free_memory
    end type MpiMutex
 
    integer, parameter :: LOCK_TAG = 10
@@ -85,6 +86,7 @@ contains
 
       allocate(lock%local_data(lock%npes-1))
 
+      call lock%register_self()
    end function new_MpiMutex
 
 
@@ -112,8 +114,6 @@ contains
       end if
 
    end subroutine acquire
-
-
 
    subroutine release(this)
       class (MpiMutex), intent(inout) :: this
@@ -155,7 +155,7 @@ contains
 
    end subroutine release
 
-   subroutine free_mpi_resources(this)
+   subroutine free_memory(this)
       class (MpiMutex), intent(inout) :: this
 
       logical, pointer :: scratchpad(:)
@@ -170,6 +170,6 @@ contains
          call MPI_Free_mem(scratchpad, ierror)
       end if
 
-   end subroutine free_mpi_resources
+   end subroutine free_memory
 
 end module pFIO_MpiMutexMod

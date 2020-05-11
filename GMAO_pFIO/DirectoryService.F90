@@ -568,7 +568,7 @@ contains
 
       call MPI_Barrier(this%comm, ierror)
 
-      call this%mutex%free_mpi_resources()
+      call this%mutex%force_finalize()
 
       call MPI_Win_free(this%win_server_directory, ierror)
       call MPI_Win_free(this%win_client_directory, ierror)

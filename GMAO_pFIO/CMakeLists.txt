@@ -51,6 +51,9 @@ set (srcs
   ModifyMetadataMessage.F90
   ProtocolParser.F90
 
+  AbstractFreeMemory.F90
+  Ref_counter.F90
+  Universal.F90
   MpiMutex.F90
   AbstractDirectoryService.F90
   DirectoryService.F90

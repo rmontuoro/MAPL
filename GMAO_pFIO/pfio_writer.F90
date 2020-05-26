@@ -1,7 +1,16 @@
+module tmp_datatype
+  type :: collection_data
+    integer, allocatable :: i_data(:)
+  end type
+end module
 
 program main
    use pFIO_ConstantsMod, only : pFIO_s_tag, pFIO_m_w_tag, pFIO_w_m_tag
    use mpi 
+   use pFIO_MessageVectorMod
+   use pFIO_MessageVectorUtilMod
+
+   use tmp_datatype
    implicit none
    integer :: Inter_Comm
    integer :: ierr
@@ -23,7 +32,7 @@ program main
    allocate(busy(n_workers-1), source =0)
    print*, "n_worker, rank", n_workers, rank
 
-   if( rank == 0 ) then
+   if( rank == 0 ) then ! master node is distributing workd
      do while (.true.)
        call MPI_recv( command, 1, MPI_INTEGER, &
                 MPI_ANY_SOURCE, pFIO_s_tag, Inter_Comm, &
@@ -93,18 +102,38 @@ program main
         ! do somthing with server should match with server
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         block
-           integer :: bsize
+           integer :: bsize, k_collections, ksize, k
            integer, allocatable :: buffer(:)
-           
-           call MPI_recv( bsize, 1, MPI_INTEGER, &
+           type(MessageVector)  :: forwardVec
+           type(collection_data), allocatable :: tmp_collection_data(:)
+
+           call MPI_recv( bsize, 1, MPI_INTEGER,    &
                server_rank, pFIO_s_tag, Inter_comm, &
                MPI_STAT, ierr)
            allocate(buffer(bsize))
            call MPI_recv( buffer, bsize, MPI_INTEGER, &
-               server_rank, pFIO_s_tag, Inter_comm, &
+               server_rank, pFIO_s_tag, Inter_comm,   &
                MPI_STAT, ierr)
-           print*, "I got ", bsize, "buffer from ", server_rank
-           deallocate(buffer)
+
+           call MPI_recv( k_collections, 1, MPI_INTEGER,&
+               server_rank, pFIO_s_tag, Inter_comm,     &
+               MPI_STAT, ierr)
+
+           allocate(tmp_collection_data(k_collections))
+           do k = 1, k_collections
+              call MPI_recv( ksize, 1, MPI_INTEGER,   &
+                 server_rank, pFIO_s_tag, Inter_comm, &
+                 MPI_STAT, ierr)
+              allocate(tmp_collection_data(k)%i_data(ksize))
+              call MPI_recv( tmp_collection_data(k)%i_data, ksize, MPI_INTEGER, &
+                 server_rank, pFIO_s_tag, Inter_comm, &
+                 MPI_STAT, ierr)
+           enddo
+           call deserialize_message_vector(buffer, forwardVec)
+           
+           ! start to write
+
+
         end block
   
 

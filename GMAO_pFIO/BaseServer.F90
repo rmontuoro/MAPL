@@ -27,8 +27,9 @@ module pFIO_BaseServerMod
    use pFIO_MessageVectorMod
    use pFIO_MessageVectorUtilMod
    use pFIO_DummyMessageMod
-   use pFIO_DoneMessageMod
+   use pFIO_ForwardDataMessageMod
    use pFIO_CollectiveStageDataMessageMod
+   use pFIO_DoneMessageMod
    use mpi
 !   use pfio_base
 
@@ -48,7 +49,7 @@ module pFIO_BaseServerMod
       procedure :: clear_RequestHandle
       procedure :: get_dmessage ! get done or dummy message
       procedure :: set_collective_request ! 
-      procedure :: send_DataToWriter ! 
+      procedure :: forward_DataToWriter ! 
 
    end type BaseServer
 
@@ -80,14 +81,16 @@ contains
      _RETURN(_SUCCESS)
    end subroutine receive_output_data
 
-   subroutine send_DataToWriter(this, rc)
+   subroutine forward_DataToWriter(this, rc)
      class (BaseServer),target, intent(inout) :: this
      integer, optional, intent(out) :: rc
 
      integer ::  n
      type (ServerThread),pointer :: threadPtr
      class (AbstractMessage),pointer :: msg
-     type (MessageVectorIterator) :: iter
+     type (MessageVector) :: forwardVec
+     type (MessageVectorIterator) :: iterForward
+     type (MessageVectorIterator) :: iterBacklog
      type (StringInteger64MapIterator) :: request_iter
      integer,pointer :: i_ptr(:)
      type(c_ptr) :: offset_address
@@ -96,9 +99,10 @@ contains
      class (RDMAReference), pointer :: remotePtr
      integer(kind=MPI_ADDRESS_KIND) :: offset, msize
 
-     integer :: writer_rank, bsize
+     integer :: writer_rank, bsize, ksize, k, rank
      integer :: command, ierr, MPI_STAT(MPI_STATUS_SIZE)
      integer, allocatable :: buffer(:)
+     type(ForwardDataMessage) :: forMSG
 
      command = 1
 
@@ -109,21 +113,68 @@ contains
 
      if (threadPtr%request_backlog%size()== 0) return
 
-     call serialize_message_vector(threadPtr%request_backlog, buffer)
-     bsize = size(buffer)
+     if (this%dataRefPtrs%size() ==0) return
 
-     if( this%rank == 5) then
-          call MPI_send(command, 1, MPI_INTEGER, 0, pFIO_s_tag, this%Inter_Comm, ierr)
-          call MPI_recv(writer_rank, 1, MPI_INTEGER, &
+     k = 0
+     do collection_counter = 1, this%dataRefPtrs%size()
+        rank = this%get_writing_PE(collection_counter)
+        if (rank /= this%rank ) continue
+        k = k + 1        
+        iterBacklog = threadPtr%request_backlog%begin()
+        do while (iterBacklog /= threadPtr%request_backlog%end())
+           msg => iterBacklog%get()
+           select type (msg)
+           type is (CollectiveStageDataMessage)
+              if ( collection_counter == this%stage_offset%of(i_to_string(msg%collection_id))) then
+                 offset = this%stage_offset%of(i_to_string(msg%request_id))
+                 msize  = this%stage_offset%of(i_to_string(MSIZE_ID + collection_counter ))
+                 forMSG = ForwardDataMessage(msg%request_id, k, msg%file_name, msg%var_name, &
+                          msg%type_kind, msg%global_count, offset, msize)
+                 call forwardVec%push_back(forMSG) 
+              endif                
+           class default
+             _ASSERT(.false., "No implmented yet")
+           end select
+           call iterBacklog%next()
+        enddo   
+     enddo
+
+     if( k == 0) return ! nothing to write
+     ! asking for writer rank 
+     call MPI_send(command, 1, MPI_INTEGER, 0, pFIO_s_tag, this%Inter_Comm, ierr)
+     ! receive writer
+     call MPI_recv(writer_rank, 1, MPI_INTEGER, &
                0, pFIO_s_tag, this%Inter_Comm , &
                MPI_STAT, ierr)
-     print*, " I am server get this worker: ", writer_rank 
-       call MPI_send(bsize, 1, MPI_INTEGER, writer_rank, pFIO_s_tag, this%Inter_Comm, ierr)
-       call MPI_send(buffer, bsize, 1, MPI_INTEGER, writer_rank, pFIO_s_tag, this%Inter_Comm, ierr)
-     endif
+     
+     ! Send forward data message
+     call serialize_message_vector(forwardVec,buffer)
+     bsize = size(buffer)
+     call MPI_send(bsize,  1,     MPI_INTEGER, writer_rank, pFIO_s_tag, this%Inter_Comm, ierr)
+     call MPI_send(buffer, bsize, MPI_INTEGER, writer_rank, pFIO_s_tag, this%Inter_Comm, ierr)
+     ! Send data 
+     !1) send number of collections
+     call MPI_send(k, 1, MPI_INTEGER, writer_rank, pFIO_s_tag, this%Inter_Comm, ierr)
+     !2) send the data
+     do collection_counter = 1, this%dataRefPtrs%size()
+        rank = this%get_writing_PE(collection_counter)
+        if (rank /= this%rank ) continue
+        dataRefPtr => this%get_dataReference(collection_counter)
+        select type(dataRefPtr)
+        type is (RDMAReference)
+           remotePtr=>dataRefPtr
+        class default
+           _ASSERT(.false., " need a remote pointer")
+        end select
+        ksize = remotePtr%msize_word
+        call MPI_send(ksize, 1, MPI_INTEGER, writer_rank, pFIO_s_tag, this%Inter_Comm, ierr)
+        call c_f_pointer(dataRefPtr%base_address,i_ptr,shape=[ksize])
+        call MPI_send(i_ptr, ksize, MPI_INTEGER, writer_rank, pFIO_s_tag, this%Inter_Comm, ierr)
+     enddo
+
 
      _RETURN(_SUCCESS)
-   end subroutine send_dataToWriter
+   end subroutine forward_dataToWriter
 
    subroutine put_DataToFile(this, rc)
      class (BaseServer),target, intent(inout) :: this
@@ -142,7 +193,7 @@ contains
      integer(kind=MPI_ADDRESS_KIND) :: offset, msize
  
      !real(KIND=REAL64) :: t0, t1
-call this%send_dataToWriter()
+call this%Forward_dataToWriter()
      !t0 = 0.0d0
      !t1 = -1.0d0
      do n= 1, this%threads%size()

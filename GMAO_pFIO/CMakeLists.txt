@@ -48,6 +48,7 @@ set (srcs
   CollectivePrefetchDataMessage.F90
   CollectiveStageDataMessage.F90
   AddHistCollectionMessage.F90
+  ForwardDataMessage.F90
   ModifyMetadataMessage.F90
   ProtocolParser.F90
 

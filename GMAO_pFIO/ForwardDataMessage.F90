@@ -1,10 +1,9 @@
-#include "pFIO_ErrLog.h"
+#include "MAPL_ErrLog.h"
 #include "unused_dummy.H"
 
 module pFIO_ForwardDataMessageMod
    use mpi
-   use pFIO_ErrorHandlingMod
-   use pFIO_ThrowMod
+   use MAPL_ExceptionHandling
    use pFIO_AbstractMessageMod
    use pFIO_UtilitiesMod
    use pFIO_AbstractDataReferenceMod

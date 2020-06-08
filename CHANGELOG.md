@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added support for sampling along a 1-D timeseries in History
+
 ### Changed
 ### Fixed
 ### Removed
@@ -14,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed duplicate `Python` directory
 
 ### Added
+
+- Added new CI test for building GCM on pull request
+
+## [2.1.4] - 2020-05-21
+
+### Fixed
+
+- Initialize pFlogger in `Regrid_Util.x`
 
 ## [2.1.3] - 2020-05-04
 

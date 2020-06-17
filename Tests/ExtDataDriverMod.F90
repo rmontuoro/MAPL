@@ -64,6 +64,7 @@ contains
       call driver%initialize_mpi()
       call MAPL_Initialize(rc=status)
       _VERIFY(status)
+      _RETURN(_SUCCESS)
    end function newExtDataDriver
 
    subroutine run(this,RC)
@@ -172,6 +173,8 @@ contains
      integer, optional, intent(out) :: rc
   
      integer :: status
+
+     _UNUSED_DUMMY(unusable)
 
      call this%cap_server%initialize(comm, &
          application_size=this%cap_options%npes_model, &

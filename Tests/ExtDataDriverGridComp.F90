@@ -4,7 +4,7 @@
 module ExtData_DriverGridCompMod
   use ESMF
   use MAPL
-  use MAPL_ExtDataGridCompMod, only : ExtData_SetServices => SetServices
+  use MAPL_ExtDataGridCompNG, only : ExtData_SetServices => SetServices
   use MAPL_HistoryGridCompMod, only : Hist_SetServices => SetServices
   use MAPL_Profiler
 

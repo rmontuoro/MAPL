@@ -117,8 +117,6 @@
      logical              :: ignoreCase
      logical              :: AllowExtrap
      integer, allocatable :: PrimaryOrder(:)
-     integer              :: blocksize
-     logical              :: prefetch
      logical              :: distributed_trans
   end type MAPL_ExtData_State
 
@@ -305,9 +303,7 @@ CONTAINS
    character(len=ESMF_MAXSTR)        :: Iam
    integer                           :: Status
 
-   type(PrimaryExports)              :: Primary
    type(PrimaryExport), pointer      :: item
-   type(DerivedExports)              :: Derived
    type(DerivedExport), pointer      :: derivedItem 
    integer                           :: i
    integer                           :: ItemCount
@@ -321,14 +317,6 @@ CONTAINS
    integer                           :: fieldcount
    type (ESMF_StateItem_Flag), pointer    :: ITEMTYPES(:)
    character(len=ESMF_MAXSTR), allocatable   :: ITEMNAMES(:)
-
-   character(len=ESMF_MAXSTR),allocatable    :: PrimaryVarNames(:)
-   character(len=ESMF_MAXSTR),allocatable    :: VarNames(:)
-
-!  logical to keep track of primary variables needed by derived fields, that ARE NOT in export state
-   logical, allocatable              :: PrimaryVarNeeded(:)
-   logical, allocatable              :: DerivedVarNeeded(:)
-   logical, allocatable              :: LocalVarNeeded(:)
 
    type(FileMetadataUtils), pointer  :: metadata
    real, pointer                     :: ptr2d(:,:) => null()
@@ -463,9 +451,6 @@ CONTAINS
    enddo
 !  note: handle case if variables in derived expression need to be allocated!
    
-
-   self%blocksize=1
-   self%prefetch=0
    self%distributed_trans=.false.
 
    call ESMF_ClockGet(CLOCK, currTIME=time, __RC__)
@@ -737,17 +722,8 @@ CONTAINS
 
 ! Clean up
 ! --------
-   if (associated(primary%item)) deallocate(primary%item)
-   if (associated(derived%item)) deallocate(derived%item)
    deallocate(ItemTypes)
    deallocate(ItemNames)
-   if (allocated(PrimaryVarNames)) deallocate(PrimaryVarNames)
-   if (allocated(PrimaryVarNeeded)) deallocate(PrimaryVarNeeded)
-   if (allocated(VarNames)) deallocate(VarNames)
-   if (allocated(DerivedVarNeeded)) deallocate(DerivedVarNeeded)
-   if (allocated(LocalVarNeeded)) deallocate(LocalVarNeeded)
-
-   !Done parsing resource file    
 
 !  Set has run to false to we know when we first go to run method it is first call
    hasRun = .false.

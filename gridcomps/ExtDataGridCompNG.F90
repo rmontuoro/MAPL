@@ -29,9 +29,6 @@
    use ESMFL_Mod
    use MAPL_GenericMod
    use MAPL_VarSpecMod
-   use ESMF_CFIOFileMod
-   use ESMF_CFIOMod
-   use ESMF_CFIOUtilMod
    use MAPL_CFIOMod
    use MAPL_NewArthParserMod
    use MAPL_ConstantsMod, only: MAPL_PI,MAPL_PI_R8,MAPL_RADIANS_TO_DEGREES
@@ -2346,52 +2343,6 @@ CONTAINS
         _RETURN(_SUCCESS)
 
      end subroutine makeMetadata
-
-     subroutine GetTimesOnFile(cfio,tSeries,rc)
-        type(ESMF_CFIO)                           :: cfio
-        type(ESMF_Time)                           :: tSeries(:)
-        integer, optional,          intent(out  ) :: rc
-
-        integer :: status
-
-        integer(ESMF_KIND_I4)              :: iyr,imm,idd,ihr,imn,isc
-        integer                            :: i
-        integer(ESMF_KIND_I8)              :: iCurrInterval
-        integer                            :: nhmsB, nymdB
-        integer                            :: begDate, begTime
-        integer(ESMF_KIND_I8),allocatable  :: tSeriesInt(:)
-
-        allocate(tSeriesInt(cfio%tSteps))
-        call getDateTimeVec(cfio%fid,begDate,begTime,tSeriesInt,__RC__)
-        
-        ! Assume success
-        If (present(rc))  rc=ESMF_SUCCESS
-
-        If (Mapl_Am_I_Root().and.(Ext_Debug > 0)) Then
-           Write(*,'(a)') '               GetTimesOnFile: Reading times'
-           Write(*,'(a,a)') '                  ==> File:', Trim(cfio%fName)
-           Write(*,'(a,2(x,I0.10),x,I0.4)') '                  ==> File timing info:', begDate, begTime, cfio%tSteps
-        End If
-
-        do i=1,cfio%tSteps
-           iCurrInterval = tSeriesInt(i)
-           call GetDate ( begDate, begTime, iCurrInterval, nymdB, nhmsB, status )
-           call MAPL_UnpackTime(nymdB,iyr,imm,idd)
-           call MAPL_UnpackTime(nhmsB,ihr,imn,isc)
-
-           If (Mapl_Am_I_Root()) Then
-              If ((Ext_Debug > 0).and.((i.eq.1).or.(i.eq.cfio%tSteps))) Then
-                 Write(*,'(a,I0.6,a,I0.4,5(a,I0.2))') '                  ==> STD Sample ',i,':  ',iYr,'-',iMM,'-',iDD,' ',iHr,':',iMn,':',iSc
-              End If
-           End If
-
-           call ESMF_TimeSet(tSeries(i), yy=iyr, mm=imm, dd=idd,  h=ihr,  m=imn, s=isc,__RC__)
-        enddo
-
-        deallocate(tSeriesInt)
-        return
-
-     end subroutine GetTimesOnFile
 
      subroutine OffsetTimeYear(inTime,yrOffset,outTime,rc)
            

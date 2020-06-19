@@ -309,7 +309,7 @@ CONTAINS
 
    type(ESMF_Time)                   :: time
 
-   type (ESMF_Field)                 :: field
+   type (ESMF_Field)                 :: field,left_field,right_field
    integer                           :: fieldRank, lm
    type (ESMF_FieldBundle)           :: bundle
    integer                           :: fieldcount
@@ -543,7 +543,10 @@ CONTAINS
             call metadata%get_coordinate_info('time',coordSize=tsteps,__RC__)
             if (tsteps == 1) then
                item%cyclic = 'single'
-               item%doInterpolate = .false.
+               call item%modelGridFields%comp1%set_parameters(disable_interpolation=.true.)
+               call item%modelGridFields%comp2%set_parameters(disable_interpolation=.true.)
+               call item%modelGridFields%auxiliary1%set_parameters(disable_interpolation=.true.)
+               call item%modelGridFields%auxiliary2%set_parameters(disable_interpolation=.true.)
             end if
          end if
       end if
@@ -571,8 +574,9 @@ CONTAINS
          else if (item%lm /= lm .and. lm /= 0) then
             item%do_Fill = .true.
          end if
-         item%modelGridFields%v1_finterp1 = MAPL_FieldCreate(field,item%var,doCopy=.true.,__RC__)
-         item%modelGridFields%v1_finterp2 = MAPL_FieldCreate(field,item%var,doCopy=.true.,__RC__)
+         left_field = MAPL_FieldCreate(field,item%var,doCopy=.true.,__RC__)
+         right_field = MAPL_FieldCreate(field,item%var,doCopy=.true.,__RC__)
+         call item%modelGridFields%comp1%set_parameters(left_field=left_field,right_field=right_field, __RC__)
          if (item%do_fill .or. item%do_vertInterp) then
             call createFileLevBracket(item,cf_master,__RC__)
          end if
@@ -619,11 +623,15 @@ CONTAINS
          else if (item%lm /= lm .and. lm /= 0) then
             item%do_Fill = .true.
          end if
-         item%modelGridFields%v1_finterp1 = MAPL_FieldCreate(field, item%fcomp1,doCopy=.true.,__RC__)
-         item%modelGridFields%v1_finterp2 = MAPL_FieldCreate(field, item%fcomp1,doCopy=.true.,__RC__)
+
+         left_field = MAPL_FieldCreate(field,item%fcomp1,doCopy=.true.,__RC__)
+         right_field = MAPL_FieldCreate(field,item%fcomp1,doCopy=.true.,__RC__)
+         call item%modelGridFields%comp1%set_parameters(left_field=left_field,right_field=right_field, __RC__)
          call ESMF_StateGet(self%ExtDataState, trim(item%vcomp2), field,__RC__)
-         item%modelGridFields%v2_finterp1 = MAPL_FieldCreate(field, item%fcomp2,doCopy=.true.,__RC__)
-         item%modelGridFields%v2_finterp2 = MAPL_FieldCreate(field, item%fcomp2,doCopy=.true.,__RC__)
+         left_field = MAPL_FieldCreate(field,item%fcomp2,doCopy=.true.,__RC__)
+         right_field = MAPL_FieldCreate(field,item%fcomp2,doCopy=.true.,__RC__)
+         call item%modelGridFields%comp1%set_parameters(left_field=left_field,right_field=right_field, __RC__)
+
          if (item%do_fill .or. item%do_vertInterp) then
             call createFileLevBracket(item,cf_master,__RC__)
          end if
@@ -911,6 +919,7 @@ CONTAINS
                call UpdateBracketTime(item,time,"L",item%interp_time1, & 
                     item%time1,file_processed1,self%allowExtrap,rc=status)
                _VERIFY(status)
+               call set_bracket_time(item,left_time=item%interp_time1)
                call IOBundle_Add_Entry(IOBundles,item,self%primaryOrder(i),file_processed1,MAPL_ExtDataLeft,item%tindex1,__RC__)
 
                IF ( (Ext_Debug > 0) .AND. MAPL_Am_I_Root() ) THEN
@@ -924,6 +933,7 @@ CONTAINS
                call UpdateBracketTime(item,time,"R",item%interp_time2, &
                     item%time2,file_processed2,self%allowExtrap,rc=status)
                _VERIFY(STATUS)
+               call set_bracket_time(item,right_time=item%interp_time2)
                call IOBundle_Add_Entry(IOBundles,item,self%primaryOrder(i),file_processed2,MAPL_ExtDataRight,item%tindex2,__RC__)
 
             else
@@ -1000,6 +1010,7 @@ CONTAINS
                call UpdateBracketTime(item,time,"R",item%interp_time2, &
                     item%time2,file_processed,self%allowExtrap,rc=status)
                _VERIFY(STATUS)
+               call set_bracket_time(item,right_time=item%interp_time2)
                call IOBundle_Add_Entry(IOBundles,item,self%primaryOrder(i),file_processed,MAPL_ExtDataRight,item%tindex2,__RC__)
 
                call MAPL_TimerOff(MAPLSTATE,'--Bracket')
@@ -1017,6 +1028,7 @@ CONTAINS
                call UpdateBracketTime(item,time,"L",item%interp_time1, &
                     item%time1,file_processed,self%allowExtrap,rc=status)
                _VERIFY(STATUS)
+               call set_bracket_time(item,left_time=item%interp_time1)
                call IOBundle_Add_Entry(IOBundles,item,self%primaryOrder(i),file_processed,MAPL_ExtDataLeft,item%tindex1,__RC__)
 
                call MAPL_TimerOff(MAPLSTATE,'--Bracket')
@@ -1125,31 +1137,7 @@ CONTAINS
         
          ! finally interpolate between bracketing times
 
-         if (item%vartype == MAPL_FieldItem) then
-
-               call ESMF_StateGet(self%ExtDataState, item%name, field, __RC__)
-               call MAPL_ExtDataInterpField(item,useTime(i),field,__RC__) 
-
-         else if (item%vartype == MAPL_BundleItem) then
-
-               call ESMF_StateGet(self%ExtDataState, item%name, bundle, __RC__)
-               call ESMF_FieldBundleGet(bundle, fieldCount = fieldCount, __RC__)
-               allocate(names(fieldCount),__STAT__)
-               call ESMF_FieldBundleGet(bundle, fieldNameList = Names, __RC__)
-               do j = 1,fieldCount
-                  call ESMF_FieldBundleGet(bundle,names(j), field=field, __RC__)
-                  call MAPL_ExtDataInterpField(item,useTime(i),field,__RC__)
-               enddo
-               deallocate(names)
-
-         else if (item%vartype == MAPL_ExtDataVectorItem) then
-
-               call ESMF_StateGet(self%ExtDataState, item%vcomp1, field, __RC__)
-               call MAPL_ExtDataInterpField(item,useTime(i),field,vector_comp=1,__RC__)
-               call ESMF_StateGet(self%ExtDataState, item%vcomp2, field, __RC__)
-               call MAPL_ExtDataInterpField(item,useTime(i),field,vector_comp=2,__RC__)
- 
-         end if
+         call MAPL_ExtDataInterpField(item,self%ExtDataState,useTime(i),__RC__)
 
       endif
 
@@ -1361,42 +1349,6 @@ CONTAINS
       end if
 
    end function DerivedExportIsConstant_
-
-! ............................................................................
-
-  subroutine scale_field_(offset, scale_factor, field, rc)
-     real, intent(in)                  :: scale_factor
-     real, intent(in)                  :: offset
-     type (ESMF_Field), intent(inout)  :: field
-     integer, optional, intent (inout) :: rc
-
-        integer       :: fieldRank
-        real, pointer :: xy(:,:)    => null()
-        real, pointer :: xyz(:,:,:) => null()
-
-        integer :: status
-
-
-        call ESMF_FieldGet(field, dimCount=fieldRank, __RC__)
-
-        _ASSERT(fieldRank == 2 .or. fieldRank == 3,'Field rank must be 2 or 3')
-
-        if (fieldRank == 2) then
-           call ESMF_FieldGet(field, farrayPtr=xy, __RC__)
-
-           if (associated(xy)) then
-              xy = offset + scale_factor*xy
-           end if
-        else if (fieldRank == 3) then
-           call ESMF_FieldGet(field, farrayPtr=xyz, __RC__)
-
-           if (associated(xyz)) then
-              xyz = offset + scale_factor*xyz
-           end if
-        end if
-
-        _RETURN(_SUCCESS)
-     end subroutine scale_field_
 
    ! ............................................................................
 
@@ -2260,71 +2212,11 @@ CONTAINS
         integer, optional, intent(out) :: rc
 
         integer :: status
-        integer :: j, fieldRank, fieldCount
-        type(ESMF_Field) :: field1, field2
-        real, pointer :: var2d_prev(:,:)
-        real, pointer :: var3d_prev(:,:,:)
-        real, pointer :: var2d_next(:,:)
-        real, pointer :: var3d_next(:,:,:)
-        character(len=ESMF_MAXSTR), ALLOCATABLE  :: NAMES (:)
-
-        item%interp_time1 = item%interp_time2
-
-        if (item%vartype == MAPL_FieldItem) then
-
-           call ESMF_FieldGet(item%modelGridFields%v1_finterp1, dimCount=fieldRank,__RC__)
-           if (fieldRank == 2) then
-              call ESMF_FieldGet(item%modelGridFields%v1_finterp1, localDE=0, farrayPtr=var2d_prev, __RC__)
-              call ESMF_FieldGet(item%modelGridFields%v1_finterp2, localDE=0, farrayPtr=var2d_next, __RC__)
-              var2d_prev=var2d_next
-           else if (fieldRank == 3) then
-              call ESMF_FieldGet(item%modelGridFields%v1_finterp1, localDE=0, farrayPtr=var3d_prev, __RC__)
-              call ESMF_FieldGet(item%modelGridFields%v1_finterp2, localDE=0, farrayPtr=var3d_next, __RC__)
-              var3d_prev=var3d_next
-           endif
-
-        else if (item%vartype == MAPL_BundleItem) then
-
-           call ESMF_FieldBundleGet(item%binterp2, fieldCount = fieldCount, __RC__)
-           allocate(names(fieldCount),__STAT__)
-           call ESMF_FieldBundleGet(item%binterp2, fieldNameList = Names, __RC__)
-           do j = 1,fieldCount
-              call ESMF_FieldBundleGet(item%binterp1, names(j), field=field1, __RC__)
-              call ESMF_FieldBundleGet(item%binterp2, names(j), field=field2, __RC__)
-              call ESMF_FieldGet(field1, dimCount=fieldRank, __RC__) 
-              if (fieldRank == 2) then
-                 call ESMF_FieldGet(field1, localDE=0, farrayPtr=var2d_prev, __RC__)
-                 call ESMF_FieldGet(field2, localDE=0, farrayPtr=var2d_next, __RC__)
-                 var2d_prev=var2d_next
-              else if (fieldRank == 3) then
-                 call ESMF_FieldGet(field1, localDE=0, farrayPtr=var3d_prev, __RC__)
-                 call ESMF_FieldGet(field2, localDE=0, farrayPtr=var3d_next, __RC__)
-                 var3d_prev=var3d_next
-              endif
-           enddo
-
-           deallocate(names)
-
-        else if (item%vartype == MAPL_ExtDataVectorItem) then
-
-           call ESMF_FieldGet(item%modelGridFields%v1_finterp1, dimCount=fieldRank, __RC__)
-           if (fieldRank == 2) then
-              call ESMF_FieldGet(item%modelGridFields%v1_finterp1, localDE=0, farrayPtr=var2d_prev, __RC__)
-              call ESMF_FieldGet(item%modelGridFields%v1_finterp2, localDE=0, farrayPtr=var2d_next, __RC__)
-              var2d_prev=var2d_next
-              call ESMF_FieldGet(item%modelGridFields%v2_finterp1, localDE=0, farrayPtr=var2d_prev, __RC__)
-              call ESMF_FieldGet(item%modelGridFields%v2_finterp2, localDE=0, farrayPtr=var2d_next, __RC__)
-              var2d_prev=var2d_next
-           else if (fieldRank == 3) then
-              call ESMF_FieldGet(item%modelGridFields%v1_finterp1, localDE=0, farrayPtr=var3d_prev, __RC__)
-              call ESMF_FieldGet(item%modelGridFields%v1_finterp2, localDE=0, farrayPtr=var3d_next, __RC__)
-              var3d_prev=var3d_next
-              call ESMF_FieldGet(item%modelGridFields%v2_finterp1, localDE=0, farrayPtr=var3d_prev, __RC__)
-              call ESMF_FieldGet(item%modelGridFields%v2_finterp2, localDE=0, farrayPtr=var3d_next, __RC__)
-              var3d_prev=var3d_next
-           endif
-
-        end if
+ 
+        call item%modelGridFields%comp1%swap_fields(__RC__)
+        if (item%vartype == MAPL_ExtDataVectorItem) then
+           call item%modelGridFields%comp2%swap_fields(__RC__)
+        end if        
 
      end subroutine swapBracketInformation
 
@@ -2795,170 +2687,22 @@ CONTAINS
      _RETURN(ESMF_SUCCESS)
   end subroutine CalcDerivedField
 
-  subroutine MAPL_ExtDataInterpField(item,time,field,vector_comp,rc)
+  subroutine MAPL_ExtDataInterpField(item,state,time,rc)
      type(PrimaryExport), intent(inout) :: item
+     type(ESMF_State),    intent(in)    :: state
      type(ESMF_Time),     intent(in   ) :: time
-     type(ESMF_Field),    intent(inout) :: field
-     integer, optional,   intent(in   ) :: vector_comp
      integer, optional,   intent(out  ) :: rc
 
      character(len=ESMF_MAXSTR) :: Iam
      integer                    :: status
+     type(ESMF_Field) :: field
 
-     type(ESMF_TimeInterval)    :: tinv1, tinv2
-     real                       :: alpha
-     real, pointer              :: var2d(:,:)   => null()
-     real, pointer              :: var3d(:,:,:) => null()
-     real, pointer              :: var2d_prev(:,:)   => null() 
-     real, pointer              :: var2d_next(:,:)   => null()
-     real, pointer              :: var3d_prev(:,:,:) => null()
-     real, pointer              :: var3d_next(:,:,:) => null()
-     integer                    :: fieldRank,i,j,k
-     character(len=ESMF_MAXSTR) :: name
-
-     integer :: yr,mm,dd,hr,mn,sc,nhms1,nymd1,nhms2,nymd2
-
-     Iam = "MAPL_ExtDataInterpField"
-     alpha = 0.0
-     if (item%doInterpolate) then
-        tinv1 = time - item%interp_time1
-        tinv2 = item%interp_time2 - item%interp_time1
-        alpha = tinv1/tinv2
-     end if
-     call ESMF_FieldGet(FIELD, dimCount=fieldRank,name=name,__RC__)
-     If (Mapl_Am_I_Root()) Then
-        If (Ext_Debug > 0) Then
-           call ESMF_TimeGet(item%interp_time1,yy=yr,mm=mm,dd=dd,h=hr,m=mn,s=sc,__RC__)
-           call MAPL_PackTime(nhms1,hr,mn,sc)
-           call MAPL_PackTime(nymd1,yr,mm,dd)
-           If (item%doInterpolate) Then
-              If (alpha .gt. 0.0) Then
-                 call ESMF_TimeGet(item%interp_time2,yy=yr,mm=mm,dd=dd,h=hr,m=mn,s=sc,__RC__)
-                 call MAPL_PackTime(nhms2,hr,mn,sc)
-                 call MAPL_PackTime(nymd2,yr,mm,dd)
-              Else
-                 nhms2=0
-                 nymd2=0
-              End If
-           Else
-              nhms2=0
-              nymd2=0
-           End If
-
-           If (.not.(item%doInterpolate) .and. Ext_Debug > 0 ) Then
-              Write(*,'(a,a,a,I0.8,x,I0.6)') '   MAPL_ExtDataInterpField: Uninterpolated field ', Trim(item%name), ' set to sample L: ', nymd1, nhms1
-           Else If (time == item%interp_time1) Then
-              Write(*,'(a,a,a,I0.8,x,I0.6)') '   MAPL_ExtDataInterpField: Interpolated field ', Trim(item%name), ' set to sample L: ', nymd1, nhms1
-           Else If (time == item%interp_time2) Then
-              Write(*,'(a,a,a,I0.8,x,I0.6)') '   MAPL_ExtDataInterpField: Interpolated field ', Trim(item%name), ' set to sample R: ', nymd2, nhms2
-           Else
-              Write(*,'(a,a,a,2(I0.8,x,I0.6,a),F10.6,a)') '   MAPL_ExtDataInterpField: Interpolated field ', Trim(item%name), ' between ', nymd1,nhms1,' and ',nymd2,nhms2,' (', &
-                alpha,' fraction)'
-           End If
-        End If
-     End If
-     call ESMF_FieldGet(FIELD, dimCount=fieldRank,name=name, __RC__)
-     if (fieldRank == 2) then
-
-        if (item%vartype == MAPL_FieldItem) then
-           call ESMF_FieldGet(item%modelGridFields%v1_finterp1, localDE=0, farrayPtr=var2d_prev, __RC__)
-           call ESMF_FieldGet(item%modelGridFields%v1_finterp2, localDE=0, farrayPtr=var2d_next, __RC__)
-        else if (item%vartype == MAPL_BundleItem) then
-           call ESMFL_BundleGetPointerToData(item%binterp1,name,var2d_prev,__RC__)
-           call ESMFL_BundleGetPointerToData(item%binterp2,name,var2d_next,__RC__)
-        else if (item%vartype == MAPL_ExtDataVectorItem) then
-           _ASSERT(present(vector_comp),'Vector comp must be present when performing vector interpolation')
-           if (vector_comp == 1) then
-              call ESMF_FieldGet(item%modelGridFields%v1_finterp1, localDE=0, farrayPtr=var2d_prev, __RC__)
-              call ESMF_FieldGet(item%modelGridFields%v1_finterp2, localDE=0, farrayPtr=var2d_next, __RC__)
-           else if (vector_comp == 2) then
-              call ESMF_FieldGet(item%modelGridFields%v2_finterp1, localDE=0, farrayPtr=var2d_prev, __RC__)
-              call ESMF_FieldGet(item%modelGridFields%v2_finterp2, localDE=0, farrayPtr=var2d_next, __RC__)
-          end if
-        end if
-        call ESMF_FieldGet(field, localDE=0, farrayPtr=var2d, __RC__)
-        ! only interpolate if we have to
-        if (time == item%interp_time1 .or. item%doInterpolate .eqv. .false.) then
-           var2d = var2d_prev
-        else if (time == item%interp_time2) then
-           var2d = var2d_next
-        else
-           do j=1,size(var2d,2)
-              do i=1,size(var2d,1)
-                 if (var2d_next(i,j) /= MAPL_UNDEF .and. var2d_prev(i,j) /= MAPL_UNDEF) then
-                     var2d(i,j) = var2d_prev(i,j) + alpha*(var2d_next(i,j)-var2d_prev(i,j))
-                 else
-                     var2d(i,j) = MAPL_UNDEF
-                 end if
-              enddo
-           enddo
-        end if
-        do j=1,size(var2d,2)
-           do i=1,size(var2d,1)
-              if (var2d(i,j) /= MAPL_UNDEF) then
-                 if (item%do_scale .and. (.not.item%do_offset)) var2d(i,j) = item%scale*var2d(i,j)
-                 if ((.not.item%do_scale) .and. item%do_offset) var2d(i,j) = var2d(i,j)+item%offset
-                 if (item%do_scale .and. item%do_offset) var2d(i,j) = item%offset + (item%scale * var2d(i,j))
-              else
-                  var2d(i,j) = MAPL_UNDEF
-              end if
-           enddo
-        enddo
-
-      else if (fieldRank == 3) then
-
-        if (item%vartype == MAPL_FieldItem) then
-           call ESMF_FieldGet(item%modelGridFields%v1_finterp1, localDE=0, farrayPtr=var3d_prev, __RC__)
-           call ESMF_FieldGet(item%modelGridFields%v1_finterp2, localDE=0, farrayPtr=var3d_next, __RC__)
-        else if (item%vartype == MAPL_BundleItem) then
-           call ESMFL_BundleGetPointerToData(item%binterp1,name,var3d_prev,__RC__)
-           call ESMFL_BundleGetPointerToData(item%binterp2,name,var3d_next,__RC__)
-        else if (item%vartype == MAPL_ExtDataVectorItem) then
-           _ASSERT(present(vector_comp),'Vector comp must be present when performing vector interpolation')
-           if (vector_comp == 1) then
-              call ESMF_FieldGet(item%modelGridFields%v1_finterp1, localDE=0, farrayPtr=var3d_prev, __RC__)
-              call ESMF_FieldGet(item%modelGridFields%v1_finterp2, localDE=0, farrayPtr=var3d_next, __RC__)
-           else if (vector_comp == 2) then
-              call ESMF_FieldGet(item%modelGridFields%v2_finterp1, localDE=0, farrayPtr=var3d_prev, __RC__)
-              call ESMF_FieldGet(item%modelGridFields%v2_finterp2, localDE=0, farrayPtr=var3d_next, __RC__)
-           end if
-        end if
-        call ESMF_FieldGet(field, localDE=0, farrayPtr=var3d, __RC__)
-        ! only interpolate if we have to
-        if (time == item%interp_time1 .or. item%doInterpolate .eqv. .false.) then
-           var3d = var3d_prev
-        else if (time == item%interp_time2) then
-           var3d = var3d_next
-        else
-           do k=lbound(var3d,3),ubound(var3d,3)
-              do j=1,size(var3d,2)
-                 do i=1,size(var3d,1)
-                    if (var3d_next(i,j,k) /= MAPL_UNDEF .and. var3d_prev(i,j,k) /= MAPL_UNDEF) then
-                        var3d(i,j,k) = var3d_prev(i,j,k) + alpha*(var3d_next(i,j,k)-var3d_prev(i,j,k))
-
-
-                    else
-                        var3d(i,j,k) = MAPL_UNDEF
-                    end if
-                 enddo
-              enddo
-            enddo
-        end if
-        do k=lbound(var3d,3),ubound(var3d,3)
-           do j=1,size(var3d,2)
-              do i=1,size(var3d,1)
-                 if (var3d(i,j,k) /= MAPL_UNDEF) then
-                    if (item%do_scale .and. (.not.item%do_offset)) var3d(i,j,k) = item%scale*var3d(i,j,k)
-                    if ((.not.item%do_scale) .and. item%do_offset) var3d(i,j,k) = var3d(i,j,k)+item%offset
-                    if (item%do_scale .and. item%do_offset) var3d(i,j,k) = item%offset + (item%scale * var3d(i,j,k))
-                 else
-                     var3d(i,j,k) = MAPL_UNDEF
-                 end if
-              enddo
-           enddo
-        enddo 
-     endif
-
+     call ESMF_StateGet(state,item%vcomp1,field,__RC__)
+     call item%modelGridFields%comp1%interpolate_to_time(field,time,__RC__)
+     if (item%vartype == MAPL_ExtDataVectorItem) then
+        call ESMF_StateGet(state,item%vcomp1,field,__RC__)
+        call item%modelGridFields%comp2%interpolate_to_time(field,time,__RC__)
+     end if        
      _RETURN(ESMF_SUCCESS)
   end subroutine MAPL_ExtDataInterpField
 
@@ -3834,37 +3578,36 @@ CONTAINS
 
            if (Bside == MAPL_ExtDataLeft .and. vcomp == 1) then 
               if (getRL_) then
-                 field = item%modelGridFields%v1_faux1
+                 call item%modelGridFields%auxiliary1%get_parameters(left_field=field,__RC__)
                  _RETURN(ESMF_SUCCESS)
               else
-                 field = item%modelGridFields%v1_finterp1
+                 call item%modelGridFields%comp1%get_parameters(left_field=field,__RC__)
                  _RETURN(ESMF_SUCCESS)
               end if
            else if (Bside == MAPL_ExtDataLeft .and. vcomp == 2) then 
               if (getRL_) then
-                 field = item%modelGridFields%v2_faux1
+                 call item%modelGridFields%auxiliary2%get_parameters(left_field=field,__RC__)
                  _RETURN(ESMF_SUCCESS)
               else
-                 field = item%modelGridFields%v2_finterp1
+                 call item%modelGridFields%comp2%get_parameters(left_field=field,__RC__)
                  _RETURN(ESMF_SUCCESS)
               end if
            else if (Bside == MAPL_ExtDataRight .and. vcomp == 1) then 
               if (getRL_) then
-                 field = item%modelGridFields%v1_faux2
+                 call item%modelGridFields%auxiliary1%get_parameters(right_field=field,__RC__)
                  _RETURN(ESMF_SUCCESS)
               else
-                 field = item%modelGridFields%v1_finterp2
+                 call item%modelGridFields%comp1%get_parameters(right_field=field,__RC__)
                  _RETURN(ESMF_SUCCESS)
               end if
            else if (Bside == MAPL_ExtDataRight .and. vcomp == 2) then 
               if (getRL_) then
-                 field = item%modelGridFields%v2_faux2
+                 call item%modelGridFields%auxiliary2%get_parameters(right_field=field,__RC__)
                  _RETURN(ESMF_SUCCESS)
               else
-                 field = item%modelGridFields%v2_finterp2
+                 call item%modelGridFields%comp2%get_parameters(right_field=field,__RC__)
                  _RETURN(ESMF_SUCCESS)
               end if
-
            end if
 
         else if (present(bundle)) then
@@ -3876,18 +3619,18 @@ CONTAINS
         if (present(field)) then
            if (Bside == MAPL_ExtDataLeft) then
               if (getRL_) then
-                 field = item%modelGridFields%v1_faux1
+                 call item%modelGridFields%auxiliary1%get_parameters(left_field=field,__RC__)
                  _RETURN(ESMF_SUCCESS)
-              else 
-                 field = item%modelGridFields%v1_finterp1
+              else
+                 call item%modelGridFields%comp1%get_parameters(left_field=field,__RC__)
                  _RETURN(ESMF_SUCCESS)
               end if
            else if (Bside == MAPL_ExtDataRight) then
               if (getRL_) then
-                 field = item%modelGridFields%v1_faux2
+                 call item%modelGridFields%auxiliary1%get_parameters(right_field=field,__RC__)
                  _RETURN(ESMF_SUCCESS)
-              else 
-                 field = item%modelGridFields%v1_finterp2
+              else
+                 call item%modelGridFields%comp1%get_parameters(right_field=field,__RC__)
                  _RETURN(ESMF_SUCCESS)
               end if
            end if
@@ -4160,22 +3903,19 @@ CONTAINS
 
      integer :: status
      type (ESMF_Grid) :: grid, newgrid
+     type(ESMF_Field) :: field,new_field
 
-     if (item%vartype==MAPL_FieldItem) then
-        call ESMF_FieldGet(item%modelGridFields%v1_finterp1,grid=grid,__RC__)
-        newGrid = MAPL_ExtDataGridChangeLev(grid,cf,item%lm,__RC__)
-        call ESMF_FieldGet(item%modelGridFields%v1_finterp1,grid=grid,__RC__)
-        item%modelGridFields%v1_faux1 = MAPL_FieldCreate(item%modelGridFields%v1_finterp1,newGrid,lm=item%lm,newName=trim(item%var),__RC__)
-        item%modelGridFields%v1_faux2 = MAPL_FieldCreate(item%modelGridFields%v1_finterp2,newGrid,lm=item%lm,newName=trim(item%var),__RC__)
-     else if (item%vartype==MAPL_ExtDataVectorItem) then
-        call ESMF_FieldGet(item%modelGridFields%v1_finterp1,grid=grid,__RC__)
-        newGrid = MAPL_ExtDataGridChangeLev(grid,cf,item%lm,__RC__)
-        call ESMF_FieldGet(item%modelGridFields%v1_finterp1,grid=grid,__RC__)
-        item%modelGridFields%v1_faux1 = MAPL_FieldCreate(item%modelGridFields%v1_finterp1,newGrid,lm=item%lm,newName=trim(item%fcomp1),__RC__)
-        item%modelGridFields%v1_faux2 = MAPL_FieldCreate(item%modelGridFields%v1_finterp2,newGrid,lm=item%lm,newName=trim(item%fcomp1),__RC__)
-        call ESMF_FieldGet(item%modelGridFields%v1_finterp1,grid=grid,__RC__)
-        item%modelGridFields%v2_faux1 = MAPL_FieldCreate(item%modelGridFields%v2_finterp1,newGrid,lm=item%lm,newName=trim(item%fcomp2),__RC__)
-        item%modelGridFields%v2_faux2 = MAPL_FieldCreate(item%modelGridFields%v2_finterp2,newGrid,lm=item%lm,newName=trim(item%fcomp2),__RC__)
+     call item%modelGridFields%comp1%get_parameters(left_field=field,__RC__)
+     newGrid = MAPL_ExtDataGridChangeLev(grid,cf,item%lm,__RC__)
+     new_field = MAPL_FieldCreate(field,newGrid,lm=item%lm,newName=trim(item%fcomp1),__RC__)
+     call item%modelGridFields%auxiliary1%set_parameters(left_field=new_field,__RC__)
+     new_field = MAPL_FieldCreate(field,newGrid,lm=item%lm,newName=trim(item%fcomp1),__RC__)
+     call item%modelGridFields%auxiliary1%set_parameters(right_field=new_field,__RC__)
+     if (item%vartype==MAPL_ExtDataVectorItem) then
+        new_field = MAPL_FieldCreate(field,newGrid,lm=item%lm,newName=trim(item%fcomp2),__RC__)
+        call item%modelGridFields%auxiliary2%set_parameters(left_field=new_field,__RC__)
+        new_field = MAPL_FieldCreate(field,newGrid,lm=item%lm,newName=trim(item%fcomp2),__RC__)
+        call item%modelGridFields%auxiliary2%set_parameters(right_field=new_field,__RC__)
      end if
      _RETURN(_SUCCESS)
 
@@ -4206,5 +3946,23 @@ CONTAINS
      _RETURN(ESMF_SUCCESS)
 
   end subroutine IOBundle_Add_Entry
+
+  subroutine set_bracket_time(item,left_time,right_time)
+     type(PrimaryExport), intent(inout) :: item
+     type(ESMF_Time), optional, intent(inout) :: left_time
+     type(ESMF_Time), optional, intent(inout) :: right_time
+     if (present(left_time)) then
+        call item%modelGridFields%comp1%set_parameters(left_time=left_time)
+        call item%modelGridFields%comp2%set_parameters(left_time=left_time)
+        call item%modelGridFields%auxiliary1%set_parameters(left_time=left_time)
+        call item%modelGridFields%auxiliary2%set_parameters(left_time=left_time)
+     end if
+     if (present(right_time)) then
+        call item%modelGridFields%comp1%set_parameters(right_time=right_time)
+        call item%modelGridFields%comp2%set_parameters(right_time=right_time)
+        call item%modelGridFields%auxiliary1%set_parameters(right_time=right_time)
+        call item%modelGridFields%auxiliary2%set_parameters(right_time=right_time)
+     end if
+  end subroutine set_bracket_time
 
  END MODULE MAPL_ExtDataGridCompNG

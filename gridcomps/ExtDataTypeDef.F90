@@ -2,6 +2,7 @@ module MAPL_ExtDataTypeDef
    use ESMF
    use MAPL_SimpleAlarm
    use MAPL_newCFIOItemMod
+   use MAPL_ExtDataBracket
 
    implicit none
 
@@ -13,11 +14,11 @@ module MAPL_ExtDataTypeDef
 
   type BracketingFields
      ! fields to store endpoints for interpolation of a vector pair
-     type(ESMF_Field)             :: v1_finterp1, v1_finterp2
-     type(ESMF_Field)             :: v2_finterp1, v2_finterp2
+     type(ExtDataBracket) :: comp1
+     type(ExtDataBracket) :: comp2
      ! if vertically interpolating vector fields
-     type(ESMF_Field)             :: v1_faux1, v1_faux2
-     type(ESMF_Field)             :: v2_faux1, v2_faux2
+     type(ExtDataBracket) :: auxiliary1
+     type(ExtDataBracket) :: auxiliary2
   end type BracketingFields
 
   type PrimaryExport
@@ -26,15 +27,12 @@ module MAPL_ExtDataTypeDef
      character(len=ESMF_MAXSTR)   :: cyclic
      character(len=ESMF_MAXSTR)   :: refresh_template
      integer                      :: Trans
-     real                         :: scale, offset
-     logical                      :: do_offset, do_scale
      character(len=ESMF_MAXSTR)   :: var
      character(len=ESMF_MAXPATHLEN)   :: file
      logical                      :: hasFileReffTime
      character(len=ESMF_MAXSTR)   :: FileReffTime
 
      type(ESMF_Time), pointer     :: refresh_time => null()
-     logical                      :: doInterpolate = .true.
      logical                      :: isConst
      real                         :: Const
      integer                      :: vartype ! MAPL_FieldItem or MAPL_BundleItem

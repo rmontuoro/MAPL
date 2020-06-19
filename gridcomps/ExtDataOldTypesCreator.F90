@@ -57,6 +57,7 @@ module MAPL_ExtDataOldTypesCreator
       type(ExtDataRule), pointer :: rule
       type(ExtDataFileStream),  pointer :: dataset
       integer :: status, semi_pos
+      logical :: disable_interpolation
 
       rule => this%rule_map%at(trim(item_name))
       primary_item%isVector = (rule%vector_partner /= '')
@@ -100,25 +101,16 @@ module MAPL_ExtDataOldTypesCreator
       end if
       ! refresh_template
       if (rule%refresh_template(1:1)=='F') then
-         primary_item%doInterpolate = .false.
+         disable_interpolation = .true.
          primary_item%refresh_template=rule%refresh_template(2:)
       else
-         primary_item%doInterpolate = .true.
+         disable_interpolation = .false.
          primary_item%refresh_template=rule%refresh_template
       end if
-      ! scale/shift
-      if (rule%scaling == 0.0) then
-         primary_item%do_scale = .false.
-      else
-         primary_item%do_scale = .true.
-         primary_item%scale = rule%scaling
-      end if
-      if (rule%shift == 0.0) then
-         primary_item%do_offset = .false.
-      else
-         primary_item%do_offset = .true.
-         primary_item%offset = rule%shift
-      end if
+      call primary_item%modelGridFields%comp1%set_parameters(offset=rule%shift,scale_factor=rule%scaling,disable_interpolation=disable_interpolation)
+      call primary_item%modelGridFields%comp2%set_parameters(offset=rule%shift,scale_factor=rule%scaling,disable_interpolation=disable_interpolation)
+      call primary_item%modelGridFields%auxiliary1%set_parameters(offset=rule%shift,scale_factor=rule%scaling, disable_interpolation=disable_interpolation)
+      call primary_item%modelGridFields%auxiliary2%set_parameters(offset=rule%shift,scale_factor=rule%scaling, disable_interpolation=disable_interpolation)
 
       ! file_template
       primary_item%isConst = .false.

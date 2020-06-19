@@ -787,8 +787,6 @@ CONTAINS
 !-------------------------------------------------------------------------
 
    type(MAPL_ExtData_state), pointer :: self        ! Legacy state
-   type(ESMF_Field)                  :: field ! Field
-   type(ESMF_FieldBundle)            :: bundle
    type(ESMF_Config)                 :: CF          ! Universal Config 
 
    character(len=ESMF_MAXSTR)        :: comp_name
@@ -797,14 +795,12 @@ CONTAINS
 
    type(PrimaryExport), pointer      :: item
    type(DerivedExport), pointer      :: derivedItem
-   integer                           :: i, j
+   integer                           :: i
 
    type(ESMF_Time)                   :: time, time0
    type(MAPL_MetaComp), pointer      :: MAPLSTATE
 
    logical                           :: doUpdate_
-   integer                           :: fieldCount
-   character(len=ESMF_MAXSTR), ALLOCATABLE  :: NAMES (:)
    character(len=ESMF_MAXPATHLEN)    :: file_processed, file_processed1, file_processed2
    logical                           :: NotSingle
    logical                           :: updateL, updateR, swap

@@ -10,6 +10,7 @@ set (srcs
      ExtDataTypeDef.F90
      ExtDataOldTypesCreator.F90
      ExtDataBracket.F90
+     ExtDataUpdatePointer.F90
     )
 
 esma_add_library (${this} SRCS ${srcs} DEPENDENCIES MAPL.shared MAPL.base)

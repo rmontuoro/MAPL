@@ -1,3 +1,4 @@
+#include "MAPL_Exceptions.h"
 #include "MAPL_ErrLog.h"
 
 module MAPL_ExtDataOldTypesCreator
@@ -47,10 +48,11 @@ module MAPL_ExtDataOldTypesCreator
    end function new_ExtDataOldTypesCreator
 
    
-   subroutine fillin_primary(this,item_name,primary_item,unusable,rc)
+   subroutine fillin_primary(this,item_name,primary_item,time,unusable,rc)
       class(ExtDataOldTypesCreator), intent(inout) :: this
       character(len=*), intent(in) :: item_name
       type(PrimaryExport), intent(inout) :: primary_item
+      type(ESMF_Time), intent(inout) :: time
       class(KeywordEnforcer), optional, intent(in) :: unusable
       integer, optional, intent(out) :: rc
 
@@ -99,14 +101,19 @@ module MAPL_ExtDataOldTypesCreator
       else 
          _ASSERT(.false.,"Invalid regridding method")
       end if
+      ! new refresh
+      call primary_item%update_freq%create_from_parameters(rule%refresh_time, &
+           rule%refresh_frequency, rule%refresh_offset, time, __RC__)
+      disable_interpolation =  .not.rule%time_interpolation 
       ! refresh_template
-      if (rule%refresh_template(1:1)=='F') then
-         disable_interpolation = .true.
-         primary_item%refresh_template=rule%refresh_template(2:)
-      else
-         disable_interpolation = .false.
-         primary_item%refresh_template=rule%refresh_template
-      end if
+      !if (rule%refresh_template(1:1)=='F') then
+         !disable_interpolation = .true.
+         !primary_item%refresh_template=rule%refresh_template(2:)
+      !else
+         !disable_interpolation = .false.
+         !primary_item%refresh_template=rule%refresh_template
+      !end if
+
       call primary_item%modelGridFields%comp1%set_parameters(offset=rule%shift,scale_factor=rule%scaling,disable_interpolation=disable_interpolation)
       call primary_item%modelGridFields%comp2%set_parameters(offset=rule%shift,scale_factor=rule%scaling,disable_interpolation=disable_interpolation)
       call primary_item%modelGridFields%auxiliary1%set_parameters(offset=rule%shift,scale_factor=rule%scaling, disable_interpolation=disable_interpolation)
@@ -139,10 +146,11 @@ module MAPL_ExtDataOldTypesCreator
 
    end subroutine fillin_primary
 
-   subroutine fillin_derived(this,item_name,derived_item,unusable,rc)
+   subroutine fillin_derived(this,item_name,derived_item,time,unusable,rc)
       class(ExtDataOldTypesCreator), intent(inout) :: this
       character(len=*), intent(in) :: item_name
       type(DerivedExport), intent(inout) :: derived_item
+      type(ESMF_Time), intent(inout) :: time
       class(KeywordEnforcer), optional, intent(in) :: unusable
       integer, optional, intent(out) :: rc
 
@@ -152,7 +160,9 @@ module MAPL_ExtDataOldTypesCreator
       rule => this%derived_map%at(trim(item_name))
       derived_item%name = trim(item_name)
       derived_item%expression = rule%expression
-      derived_item%refresh_template = rule%refresh_template
+      call derived_item%update_freq%create_from_parameters(rule%refresh_time, &
+           rule%refresh_frequency, rule%refresh_offset, time, __RC__)
+      !derived_item%refresh_template = rule%refresh_template
       derived_item%masking=.false.
       if (index(derived_item%expression,"mask") /= 0 ) then
          derived_item%masking=.true.

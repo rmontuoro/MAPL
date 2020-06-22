@@ -12,10 +12,12 @@ module MAPL_SimpleAlarm
 
    type :: SimpleAlarm
       private
+      logical :: created = .false.
       type(ESMF_Time) :: reference_time
       type(ESMF_TimeInterval) :: ring_interval
       contains
          procedure :: is_ringing
+         procedure :: check_if_created
    end type SimpleAlarm
 
    interface SimpleAlarm
@@ -31,6 +33,7 @@ contains
 
       type(SimpleAlarm) :: new_alarm
 
+      new_alarm%created = .true.
       new_alarm%reference_time = reference_time
       new_alarm%ring_interval = ring_interval
  
@@ -59,5 +62,12 @@ contains
       end if
       _RETURN(_SUCCESS)
    end function is_ringing
+
+   function check_if_created(this) result(created)
+      class(SimpleAlarm), intent(inout) :: this
+      logical :: created
+  
+      created = this%created
+   end function check_if_created
 
 end module MAPL_SimpleAlarm

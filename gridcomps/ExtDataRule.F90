@@ -15,7 +15,6 @@ module MAPL_ExtDataRule
       logical :: time_interpolation
       character(:), allocatable :: climatology
       character(:), allocatable :: regrid_method
-      character(:), allocatable :: refresh_date
       character(:), allocatable :: refresh_time
       character(:), allocatable :: refresh_frequency
       character(:), allocatable :: refresh_offset
@@ -71,10 +70,7 @@ contains
       call config%get(rule%regrid_method,"regrid_method",default='REGRID_METHOD_BILINEAR',rc=status)
       _VERIFY(status)
 
-      call config%get(rule%refresh_date,"update_reff_date",default='',rc=status)
-      _VERIFY(status)
-
-      call config%get(rule%refresh_time,"update_reff_time",default='',rc=status)
+      call config%get(rule%refresh_time,"update_reff_time",default='00',rc=status)
       _VERIFY(status)
 
       call config%get(rule%refresh_frequency,"update_frequency",default='PT0S',rc=status)

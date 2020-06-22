@@ -3,6 +3,7 @@ module MAPL_ExtDataTypeDef
    use MAPL_SimpleAlarm
    use MAPL_newCFIOItemMod
    use MAPL_ExtDataBracket
+   use MAPL_ExtDataPointerUpdate
 
    implicit none
 
@@ -73,6 +74,7 @@ module MAPL_ExtDataTypeDef
      character(len=4)             :: fileVDir = "down"
      character(len=ESMF_MAXSTR)   :: levUnit
      logical                      :: havePressure = .false.
+     type(ExtDataPointerUpdate) :: update_freq
   end type PrimaryExport
   
   type DerivedExport
@@ -86,6 +88,7 @@ module MAPL_ExtDataTypeDef
      type(ESMF_TimeInterval)      :: tshift
      type(SimpleAlarm)            :: update_alarm
      logical                      :: alarmIsEnabled = .false.
+     type(ExtDataPointerUpdate)   :: update_freq
   end type DerivedExport
 
 

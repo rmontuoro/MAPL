@@ -398,6 +398,7 @@ CONTAINS
 !  Initialize MAPL Generic
 !  -----------------------
    call MAPL_GenericInitialize ( GC, IMPORT, EXPORT, clock,  __RC__ )
+   call ESMF_ClockGet(CLOCK, currTIME=time, __RC__)
 
 
 !                         ---------------------------
@@ -438,11 +439,11 @@ CONTAINS
    do i=1,size(itemnames)
       if (item_types(i)==Primary_Type) then
          num_primary=num_primary+1
-         call config_yaml%fillin_primary(trim(itemnames(i)),self%primary%item(num_primary),__RC__)
+         call config_yaml%fillin_primary(trim(itemnames(i)),self%primary%item(num_primary),time,__RC__)
          call CreateTimeInterval(self%primary%item(num_primary),clock,__RC__)
       else if (item_types(i)==Derived_type) then
          num_derived=num_derived+1
-         call config_yaml%fillin_derived(trim(itemnames(i)),self%derived%item(num_derived),__RC__)
+         call config_yaml%fillin_derived(trim(itemnames(i)),self%derived%item(num_derived),time,__RC__)
       end if
       call ESMF_StateGet(Export,trim(itemnames(i)),field,__RC__)
       call MAPL_StateAdd(self%ExtDataState,field,__RC__)
@@ -451,7 +452,6 @@ CONTAINS
    
    self%distributed_trans=.false.
 
-   call ESMF_ClockGet(CLOCK, currTIME=time, __RC__)
    PrimaryLoop: do i = 1, self%primary%nItems
 
       item => self%primary%item(i)
@@ -461,29 +461,6 @@ CONTAINS
       ENDIF
 
       item%pfioCollection_id = MAPL_ExtDataAddCollection(item%file)
-
-      ! parse refresh template to see if we have a time shift during constant updating
-      k = index(item%refresh_template,';')
-      call ESMF_TimeIntervalSet(item%tshift,__RC__)
-      if (k.ne.0) then
-         _ASSERT(trim(item%refresh_template(:k-1))=="0",'Refresh template must start with 0 when offset is present')
-         if (item%refresh_template(k+1:k+1) == '-' ) then
-            isNegative = .true.
-            read(item%refresh_template(k+2:),*,iostat=ios)nhms
-         else
-            isNegative = .false.
-            read(item%refresh_template(k+1:),*,iostat=ios)nhms
-         end if
-         call MAPL_UnpackTime(nhms,ihr,imn,isc)
-         if (isNegative) then
-            ihr = -ihr
-            imn = -imn
-            isc = -isc
-         end if
-         call ESMF_TimeIntervalSet(item%tshift,h=ihr,m=imn,s=isc,__RC__)
-         item%refresh_template = "0"
-      end if
-      call SetRefreshAlarms(clock,primaryItem=item,__RC__)
 
       if (item%vartype == MAPL_BundleItem) then
 
@@ -642,38 +619,6 @@ CONTAINS
 
       call ESMF_TimeSet(item%refresh_time, yy=0, __RC__)
    end do PrimaryLoop
-
-   DerivedLoop: do i =1, self%derived%nItems
-      allocate(self%derived%item(i)%refresh_time,__STAT__)
-
-      derivedItem => self%derived%item(i)
-
-      ! parse refresh template to see if we have a time shift during constant updating
-      k = index(derivedItem%refresh_template,';')
-      call ESMF_TimeIntervalSet(derivedItem%tshift,__RC__)
-      if (k.ne.0) then
-         _ASSERT(trim(derivedItem%refresh_template(:k-1))=="0",'Refresh template must start with 0 when offset is present')
-         if (derivedItem%refresh_template(k+1:k+1) == '-' ) then
-            isNegative = .true.
-            read(derivedItem%refresh_template(k+2:),*,iostat=ios)nhms
-         else
-            isNegative = .false.
-            read(derivedItem%refresh_template(k+1:),*,iostat=ios)nhms
-         end if
-         call MAPL_UnpackTime(nhms,ihr,imn,isc)
-         if (isNegative) then
-            ihr = -ihr
-            imn = -imn
-            isc = -isc
-         end if
-         call ESMF_TimeIntervalSet(derivedItem%tshift,h=ihr,m=imn,s=isc,__RC__)
-         derivedItem%refresh_template = "0"
-      end if
-
-      call SetRefreshAlarms(clock,derivedItem=derivedItem,__RC__)
-
-      call ESMF_TimeSet(self%derived%item(i)%refresh_time, yy=0, __RC__)
-   end do DerivedLoop
 
 #ifdef DEBUG
    if (MAPL_AM_I_ROOT()) then
@@ -889,8 +834,9 @@ CONTAINS
 
       call MAPL_TimerOn(MAPLSTATE,"--CheckUpd")
 
-      call CheckUpdate(doUpdate_,time,time0,hasRun,primaryItem=item,__RC__)
-      doUpdate(i) = doUpdate_
+      call item%update_freq%check_update(doUpdate_,time,time0,__RC__)
+      !call CheckUpdate(doUpdate_,time,time0,hasRun,primaryItem=item,__RC__)
+      doUpdate(i) = doUpdate_ .or. (.not.hasRun)
       call MAPL_TimerOff(MAPLSTATE,"--CheckUpd")
 
       DO_UPDATE: if (doUpdate_) then
@@ -1045,11 +991,6 @@ CONTAINS
 
       end if DO_UPDATE
 
-      if (PrimaryExportIsConstant_(item) .and. associated(item%refresh_time)) then
-         deallocate(item%refresh_time)
-         item%refresh_time => null()
-      end if
-
    end do READ_LOOP
 
    IF ( (Ext_Debug > 0) .AND. MAPL_Am_I_Root() ) THEN
@@ -1152,18 +1093,15 @@ CONTAINS
 
       derivedItem => self%derived%item(i)
 
-      call CheckUpdate(doUpdate_,time,time0,hasRun,derivedItem=deriveditem,__RC__)
+      call derivedItem%update_freq%check_update(doUpdate_,time,time0,__RC__)
+      doUpdate_ = doUpdate_ .or. (.not.hasRun)
+      !call CheckUpdate(doUpdate_,time,time0,hasRun,derivedItem=deriveditem,__RC__)
 
       if (doUpdate_) then
 
          call CalcDerivedField(self%ExtDataState,derivedItem%name,derivedItem%expression, &
               derivedItem%masking,__RC__)
 
-      end if
-
-      if (DerivedExportIsConstant_(derivedItem) .and. associated(derivedItem%refresh_time)) then
-          deallocate(self%derived%item(i)%refresh_time)
-          self%derived%item(i)%refresh_time => null()
       end if
 
    end do
@@ -2023,16 +1961,16 @@ CONTAINS
            ! correspond to the year in the refresh template. In this case, an additional year 
            ! offset must be applied.
            yrOffsetStamp = 0
-           buff = trim(item%refresh_template)
-           buff = ESMF_UtilStringLowerCase(buff, __RC__)
-           If (buff /= "0" .and. index(buff,"p")==0) Then
-              newTime = timestamp_(fTime,item%refresh_template,__RC__)
-              if (newTime .ne. fTime) Then
-                 call ESMF_TimeGet(fTime,yy=iyr,mm=imm,dd=idd,h=ihr,m=imn,s=isc,__RC__)
-                 call ESMF_TimeGet(newTime,yy=fyr,mm=fmm,dd=fdd,h=fhr,m=fmn,s=fsc,__RC__)
-                 yrOffsetStamp = fYr - iYr
-              End If
-           End If
+           !buff = trim(item%refresh_template)
+           !buff = ESMF_UtilStringLowerCase(buff, __RC__)
+           !If (buff /= "0" .and. index(buff,"p")==0) Then
+              !newTime = timestamp_(fTime,item%refresh_template,__RC__)
+              !if (newTime .ne. fTime) Then
+                 !call ESMF_TimeGet(fTime,yy=iyr,mm=imm,dd=idd,h=ihr,m=imn,s=isc,__RC__)
+                 !call ESMF_TimeGet(newTime,yy=fyr,mm=fmm,dd=fdd,h=fhr,m=fmn,s=fsc,__RC__)
+                 !yrOffsetStamp = fYr - iYr
+              !End If
+           !End If
 
            ! try to get bracketing time on file using current time
            call GetBracketTimeOnFile(fdata,xTSeries,readTime,bSide,UniFileClim,interpTime,fileTime,tindex,yrOffsetInt=yrOffset+yrOffsetStamp,rc=status)
@@ -2145,29 +2083,29 @@ CONTAINS
               yrOffsetStamp = 0
               buff = trim(item%refresh_template)
               buff = ESMF_UtilStringLowerCase(buff, __RC__)
-              If (buff /= "0" .and. index(buff,"p")==0 ) Then
-                 newTime = timestamp_(fTime,item%refresh_template,__RC__)
-                 If (Mapl_Am_I_Root().and.Ext_Debug > 0) Then
-                    call ESMF_TimeGet(fTime,yy=iyr,mm=imm,dd=idd,h=ihr,m=imn,s=isc,__RC__)
-                    call ESMF_TimeGet(newTime,yy=fyr,mm=fmm,dd=fdd,h=fhr,m=fmn,s=fsc,__RC__)
+              !If (buff /= "0" .and. index(buff,"p")==0 ) Then
+                 !newTime = timestamp_(fTime,item%refresh_template,__RC__)
+                 !If (Mapl_Am_I_Root().and.Ext_Debug > 0) Then
+                    !call ESMF_TimeGet(fTime,yy=iyr,mm=imm,dd=idd,h=ihr,m=imn,s=isc,__RC__)
+                    !call ESMF_TimeGet(newTime,yy=fyr,mm=fmm,dd=fdd,h=fhr,m=fmn,s=fsc,__RC__)
 
-                    Write(*,'(3a,I0.4,5(a,I0.2),a,I0.4,5(a,I0.2),2a)') '            UpdateBracketTime: Template ',Trim(item%refresh_template),' applied: ',&
-                    iyr,'-',imm,'-',idd,' ',ihr,':',imn,':',isc,' -> ',&
-                    fyr,'-',fmm,'-',fdd,' ',fhr,':',fmn,':',fsc,&
-                    ' on file ',Trim(file_processed)
+                    !Write(*,'(3a,I0.4,5(a,I0.2),a,I0.4,5(a,I0.2),2a)') '            UpdateBracketTime: Template ',Trim(item%refresh_template),' applied: ',&
+                    !iyr,'-',imm,'-',idd,' ',ihr,':',imn,':',isc,' -> ',&
+                    !fyr,'-',fmm,'-',fdd,' ',fhr,':',fmn,':',fsc,&
+                    !' on file ',Trim(file_processed)
 
-                 End If
-                 if (newTime .ne. fTime) Then
-                    call ESMF_TimeGet(fTime,yy=iyr,mm=imm,dd=idd,h=ihr,m=imn,s=isc,__RC__)
-                    call ESMF_TimeGet(newTime,yy=fyr,mm=fmm,dd=fdd,h=fhr,m=fmn,s=fsc,__RC__)
-                    yrOffsetStamp = fYr - iYr
+                 !End If
+                 !if (newTime .ne. fTime) Then
+                    !call ESMF_TimeGet(fTime,yy=iyr,mm=imm,dd=idd,h=ihr,m=imn,s=isc,__RC__)
+                    !call ESMF_TimeGet(newTime,yy=fyr,mm=fmm,dd=fdd,h=fhr,m=fmn,s=fsc,__RC__)
+                    !yrOffsetStamp = fYr - iYr
 
-                    If (Mapl_Am_I_Root().and.Ext_Debug > 0) Then
-                       Write(*,'(2(a,I4),2a)') '            UpdateBracketTime: Year offset modified from ',yrOffset,' to ',yrOffset+yrOffsetStamp,' to satisfy refresh template for ', Trim(file_processed)
-                    End If
+                    !If (Mapl_Am_I_Root().and.Ext_Debug > 0) Then
+                       !Write(*,'(2(a,I4),2a)') '            UpdateBracketTime: Year offset modified from ',yrOffset,' to ',yrOffset+yrOffsetStamp,' to satisfy refresh template for ', Trim(file_processed)
+                    !End If
 
-                 End If
-              End If
+                 !End If
+              !End If
 
               ! try to get bracketing time on file using new time
               call GetBracketTimeOnFile(fdata,xTSeries,readTime,bSide,UniFileClim,interpTime,fileTime,tindex,yrOffsetInt=yrOffset+yrOffsetStamp,rc=status)

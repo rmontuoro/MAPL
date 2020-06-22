@@ -8,7 +8,6 @@ module MAPL_ExtDataDerived
 
    type, public :: ExtDataDerived
       character(:), allocatable :: expression
-      character(:), allocatable :: refresh_date
       character(:), allocatable :: refresh_time
       character(:), allocatable :: refresh_frequency
       character(:), allocatable :: refresh_offset
@@ -37,9 +36,6 @@ contains
       call config%get(rule%expression,"function",default='',is_present=is_present,rc=status)
       _VERIFY(status)
       _ASSERT(is_present,"Missing function in ExtDataDerived")
-
-      call config%get(rule%refresh_date,"update_reff_date",default='',rc=status)
-      _VERIFY(status)
 
       call config%get(rule%refresh_time,"update_reff_time",default='',rc=status)
       _VERIFY(status)

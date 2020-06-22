@@ -7,48 +7,28 @@ module MAPL_TimeStringConversion
    implicit none
    private
 
+   public :: string_to_integer_time
+   public :: string_to_integer_date
    public :: string_to_esmf_time
    public :: string_to_esmf_timeinterval
 
 contains
 
-   function string_to_esmf_time(time_string,unusable,rc) result(time)
+   function string_to_integer_time(time_string,unusable,rc) result(time)
       character(len=*), intent(in) :: time_string
       class(KeywordEnforcer), optional, intent(in) :: unusable
       integer, optional, intent(out) :: rc
 
-      type(ESMF_Time) :: time
-      integer :: status
-      integer ypos(2), mpos(2), dpos(2), hpos(2), spos(2)
+      integer :: time
+      integer mpos(2), hpos(2), spos(2)
       integer strlen
-      integer firstdash, lastdash
       integer firstcolon, lastcolon
       integer lastspace
-      integer year,month,day,hour,min,sec
+      integer hour,min,sec
 
       _UNUSED_DUMMY(unusable)
 
       strlen = LEN_TRIM (time_string)
-
-      firstdash = index(time_string, '-')
-      lastdash  = index(time_string, '-', BACK=.TRUE.)
-
-      if (firstdash .LE. 0 .OR. lastdash .LE. 0) then
-        rc = -1
-        return
-      endif
-
-      ypos(2) = firstdash - 1
-      mpos(1) = firstdash + 1
-      ypos(1) = ypos(2) - 3
-
-      mpos(2) = lastdash - 1
-      dpos(1) = lastdash + 1
-      dpos(2) = dpos(1) + 1
-
-      read ( time_string(ypos(1):ypos(2)), * ) year
-      read ( time_string(mpos(1):mpos(2)), * ) month
-      read ( time_string(dpos(1):dpos(2)), * ) day
 
       firstcolon = index(time_string, ':')
       if (firstcolon .LE. 0) then
@@ -95,7 +75,79 @@ contains
         endif
       endif
 
-      write(*,*)'bmaa time: ',year,month,day,hour,min,sec
+      time = hour*10000+min*100+sec 
+      _RETURN(_SUCCESS)
+
+   end function string_to_integer_time
+
+   function string_to_integer_date(time_string,unusable,rc) result(date)
+      character(len=*), intent(in) :: time_string
+      class(KeywordEnforcer), optional, intent(in) :: unusable
+      integer, optional, intent(out) :: rc
+
+      integer :: date
+      integer ypos(2), mpos(2), dpos(2)
+      integer strlen
+      integer firstdash, lastdash
+      integer year,month,day
+
+      _UNUSED_DUMMY(unusable)
+
+      strlen = LEN_TRIM (time_string)
+
+      firstdash = index(time_string, '-')
+      lastdash  = index(time_string, '-', BACK=.TRUE.)
+
+      if (firstdash .LE. 0 .OR. lastdash .LE. 0) then
+        rc = -1
+        return
+      endif
+
+      ypos(2) = firstdash - 1
+      mpos(1) = firstdash + 1
+      ypos(1) = ypos(2) - 3
+
+      mpos(2) = lastdash - 1
+      dpos(1) = lastdash + 1
+      dpos(2) = dpos(1) + 1
+
+      read ( time_string(ypos(1):ypos(2)), * ) year
+      read ( time_string(mpos(1):mpos(2)), * ) month
+      read ( time_string(dpos(1):dpos(2)), * ) day
+
+      date = year*10000+month*100+day
+      _RETURN(_SUCCESS)
+
+   end function string_to_integer_date
+
+   function string_to_esmf_time(input_string,unusable,rc) result(time)
+      character(len=*), intent(in) :: input_string
+      class(KeywordEnforcer), optional, intent(in) :: unusable
+      integer, optional, intent(out) :: rc
+
+      type(ESMF_Time) :: time
+      integer :: status
+      integer :: tpos
+      integer year,month,day,hour,min,sec
+      integer :: int_time, int_date
+      character(len=:), allocatable :: date_string,time_string
+
+      _UNUSED_DUMMY(unusable)
+
+      tpos = index(input_string,'T')
+      _ASSERT(tpos >0,"Invalid date/time format, missing date/time separator")
+     
+      date_string = input_string(:tpos-1)
+      time_string = input_string(tpos+1:)
+      int_time = string_to_integer_time(time_string,__RC__)
+      int_date = string_to_integer_date(time_string,__RC__)
+
+      year=int_date/10000
+      month=mod(int_date/100,100)
+      day=mod(int_date,100)
+      hour=int_time/10000
+      min=mod(int_time/100,100)
+      sec=mod(int_time,100)
       call ESMF_TimeSet(time,yy=year,mm=month,dd=day,h=hour,m=min,s=sec,__RC__)
       _RETURN(_SUCCESS)
 
@@ -173,7 +225,6 @@ contains
          end if
       end if
 
-      write(*,*)'bmaa interval: ',year,month,day,hour,min,sec
       call ESMF_TimeIntervalSet(time_interval,yy=year,mm=month,d=day,h=hour,m=min,s=sec,__RC__)
       _RETURN(_SUCCESS)
 

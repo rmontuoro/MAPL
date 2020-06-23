@@ -302,7 +302,6 @@ CONTAINS
    integer                           :: Status
 
    type(PrimaryExport), pointer      :: item
-   type(DerivedExport), pointer      :: derivedItem 
    integer                           :: i
    integer                           :: ItemCount
    integer                           :: PrimaryItemCount, DerivedItemCount
@@ -319,10 +318,8 @@ CONTAINS
    type(FileMetadataUtils), pointer  :: metadata
    real, pointer                     :: ptr2d(:,:) => null()
    real, pointer                     :: ptr3d(:,:,:) => null()
-   integer                           :: k, ios
    logical           :: caseSensitiveVarNames
-   integer           :: idx,nhms,ihr,imn,isc,tsteps
-   logical           :: isNegative
+   integer           :: idx,tsteps
    type(ESMF_VM) :: vm
    type(MAPL_MetaComp),pointer :: MAPLSTATE
 
@@ -615,9 +612,6 @@ CONTAINS
 
       end if
 
-      allocate(item%refresh_time,__STAT__)
-
-      call ESMF_TimeSet(item%refresh_time, yy=0, __RC__)
    end do PrimaryLoop
 
 #ifdef DEBUG
@@ -1168,8 +1162,6 @@ CONTAINS
    character(len=ESMF_MAXSTR)        :: Iam
    integer                           :: status
 
-   integer                           :: i
-
 
 !  Get my name and set-up traceback handle
 !  ---------------------------------------
@@ -1185,25 +1177,10 @@ CONTAINS
 !  ------------------------------------
    call extract_ ( GC, self, CF, __RC__)
 
-!  Free the memory used for the bracketing arrays
-!  -----------------------------------------------------------
-   if (self%active) then
-      do i = 1, self%primary%nItems
-
-         if (self%primary%item(i)%isConst) cycle
-
-         if (associated(self%primary%item(i)%refresh_time)) then
-            deallocate(self%primary%item(i)%refresh_time)
-         end if
-
-      end do
-
-
 !  Free the memory used to hold the primary export items
 !  -----------------------------------------------------
-      if (associated(self%primary%item)) then
-         deallocate(self%primary%item)
-      end if
+   if (associated(self%primary%item)) then
+      deallocate(self%primary%item)
    end if
 
 
@@ -1261,7 +1238,7 @@ CONTAINS
    
       type(PrimaryExport), intent(in) :: item
 
-      if ( trim(item%refresh_template) == '-' .or. &
+      if ( item%update_freq%is_disabled() .or. &
            trim(item%file) == '/dev/null' ) then
           PrimaryExportIsConstant_ = .true. 
       else
@@ -1276,7 +1253,7 @@ CONTAINS
    
       type(DerivedExport), intent(in) :: item
 
-      if ( trim(item%refresh_template) == '-') then
+      if ( item%update_freq%is_disabled() ) then
           DerivedExportIsConstant_ = .true. 
       else
           DerivedExportIsConstant_ = .false.
@@ -1554,26 +1531,16 @@ CONTAINS
            Inquire(file=trim(file),EXIST=found)
 
         else
-           buff = trim(item%refresh_template)
-           buff = ESMF_UtilStringLowerCase(buff, __RC__)
-           if ( index(buff,'t')/=0) then
-              if (index(buff,'p') == 0) then
-                 ftime = timestamp_(time,buff,__RC__)
-              else
-                 ftime = time
-              end if
-           else
-              ftime = time
-           end if
+           ftime = time
 
            call ESMF_TimeGet(fTime,yy=iyr,mm=imm,dd=idd,h=ihr,m=imn,s=iss,__RC__)
            if (item%cyclic == 'y') then
               iyr = item%climyear
            end if
-          call MAPL_PackTime(nymd,iyr,imm,idd)
-          call MAPL_PackTime(nhms,ihr,imn,iss)
-          call string_template(file,item%file,nymd=nymd,nhms=nhms,__RC__)
-          Inquire(file=trim(file),EXIST=found)
+           call MAPL_PackTime(nymd,iyr,imm,idd)
+           call MAPL_PackTime(nhms,ihr,imn,iss)
+           call string_template(file,item%file,nymd=nymd,nhms=nhms,__RC__)
+           Inquire(file=trim(file),EXIST=found)
 
         end if
 
@@ -2081,8 +2048,8 @@ CONTAINS
               !If (Mapl_Am_I_Root()) Write (*,'(a,a,x,a)') ' SUPERDEBUG: File/template: ',Trim(file_processed),Trim(item%refresh_template)
               ! The file template may be "hiding" a year offset from us
               yrOffsetStamp = 0
-              buff = trim(item%refresh_template)
-              buff = ESMF_UtilStringLowerCase(buff, __RC__)
+              !buff = trim(item%refresh_template)
+              !buff = ESMF_UtilStringLowerCase(buff, __RC__)
               !If (buff /= "0" .and. index(buff,"p")==0 ) Then
                  !newTime = timestamp_(fTime,item%refresh_template,__RC__)
                  !If (Mapl_Am_I_Root().and.Ext_Debug > 0) Then
@@ -3256,156 +3223,6 @@ CONTAINS
      _RETURN(ESMF_SUCCESS)
 
   end function MAPL_ExtDataGetFStartTime
-
-  subroutine AdvanceAndCount(CF,nLines,rc)
-
-     type(ESMF_Config), intent(inout) :: cf
-     integer, intent(out)             :: nLines
-     integer, optional, intent(out)   :: rc
-
-     integer :: iCnt
-     logical :: inBlock
-     character(len=ESMF_MAXPATHLEN) :: thisLine
-     integer :: status
-     character(len=ESMF_MAXSTR) :: Iam
-     Iam = "AdvanceAndCount"
-
-     inBlock = .true.
-     iCnt = 0
-     do while(inBlock)
-         call ESMF_ConfigNextLine(CF,rc=status)
-         _VERIFY(STATUS)
-         call ESMF_ConfigGetAttribute(CF,thisLine,rc=status)
-         _VERIFY(STATUS)
-         if (trim(thisLine) == "%%") then 
-            inBlock = .false.
-         else 
-            iCnt = iCnt + 1
-         end if
-     end do
-     nLines = iCnt
-
-     _RETURN(ESMF_SUCCESS)
-
-  end subroutine advanceAndCount
-
-  subroutine CheckUpdate(doUpdate,updateTime,currTime,hasRun,primaryItem,derivedItem,rc) 
-     logical,                       intent(out  ) :: doUpdate
-     type(ESMF_Time),               intent(inout) :: updateTime
-     type(ESMF_Time),               intent(inout) :: currTime
-     logical        ,               intent(in   ) :: hasRun
-     type(PrimaryExport), optional, intent(inout) :: primaryItem
-     type(DerivedExport), optional, intent(inout) :: derivedItem
-     integer,             optional, intent(out  ) :: rc
-
-     character(len=ESMF_MAXSTR) :: Iam
-     integer                    :: status
-     type(ESMF_Time)            :: time,time0,refresh_time
-     Iam = "CheckUpdate"
-
-     time0 = currTime
-     time  = currTime
-     if (present(primaryItem)) then
-       
-        if (primaryItem%AlarmIsEnabled) then
-           doUpdate = primaryItem%update_alarm%is_ringing(currTime,__RC__)
-           if (hasRun .eqv. .false.) doUpdate = .true.
-           updateTime = currTime
-        else if (trim(primaryItem%cyclic) == 'single') then
-           doUpdate = .true.
-        else
-           if (primaryItem%refresh_template == "0") then
-              doUpdate = .true.
-              updateTime = time0 + PrimaryItem%tshift
-           else
-              updateTime = time0
-              if (.not. associated(PrimaryItem%refresh_time)) then
-                doUpdate = .false.
-              else
-                 refresh_time = timestamp_(time, PrimaryItem%refresh_template, __RC__)
-                 if (refresh_time /= primaryItem%refresh_time) then
-                    doUpdate = .true.
-                    primaryItem%refresh_time = refresh_time
-                    updateTime = refresh_time
-                 else
-                    doUpdate = .false.
-                 end if
-              end if
-           end if
-        end if
-     else if (present(derivedItem)) then
-        if (DerivedItem%AlarmIsEnabled) then
-           doUpdate = derivedItem%update_alarm%is_ringing(currTime,__RC__)
-           updateTime = currTime
-        else
-           if (derivedItem%refresh_template == "0") then
-              doUpdate = .true.
-              updateTime = time0 + derivedItem%tshift
-           else
-              updateTime = time0
-              if (.not. associated(derivedItem%refresh_time)) then
-                doUpdate = .false.
-              else
-                 refresh_time = timestamp_(time, derivedItem%refresh_template, __RC__)
-                 if (refresh_time /= derivedItem%refresh_time) then
-                    doUpdate = .true.
-                    derivedItem%refresh_time = refresh_time
-                    time = refresh_time
-                 else
-                    doUpdate = .false.
-                 end if
-              end if
-           end if
-        end if
-     end if
-     
-     _RETURN(ESMF_SUCCESS)
-  end subroutine CheckUpdate
-
-  subroutine SetRefreshAlarms(clock,primaryItem,derivedItem,rc) 
-     type(ESMF_Clock),              intent(inout) :: Clock
-     type(PrimaryExport), optional, intent(inout) :: primaryItem
-     type(DerivedExport), optional, intent(inout) :: derivedItem
-     integer,             optional, intent(out  ) :: rc
-
-     integer                    :: pindex,cindex,iyy,imm,idd,ihh,imn,isc
-     character(len=ESMF_MAXSTR) :: refresh_template,ctInt
-     character(len=ESMF_MAXSTR) :: Iam
-     type(ESMF_TimeInterval)    :: tInterval
-     type(ESMF_Time)            :: current_time
-     integer                    :: status
-     Iam = "SetRefreshAlarms"
-
-     if (present(primaryItem)) then
-        refresh_template = primaryItem%refresh_template
-     else if (present(derivedItem)) then
-        refresh_template = derivedItem%refresh_template
-     end if
-     pindex = index(refresh_template,'P')
-     if (pindex > 0) then
-        call ESMF_ClockGet(Clock,currTime=current_time,rc=status)
-        _VERIFY(status)
-        ! now get time interval. Put 0000-00-00 in front if not there so parsetimeunits doesn't complain
-        ctInt = refresh_template(pindex+1:)
-        cindex = index(ctInt,'T')
-        if (cindex == 0) ctInt = '0000-00-00T'//trim(ctInt)
-        call MAPL_NCIOParseTimeUnits(ctInt,iyy,imm,idd,ihh,imn,isc,status)
-        _VERIFY(STATUS)
-        call ESMF_TimeIntervalSet(tInterval,yy=iyy,mm=imm,d=idd,h=ihh,m=imn,s=isc,rc=status)
-        _VERIFY(STATUS) 
-        if (present(primaryItem)) then
-           primaryItem%update_alarm = simpleAlarm(current_time,tInterval,rc=status)
-           _VERIFY(status)
-           primaryItem%alarmIsEnabled = .true.
-        else if (present(derivedItem)) then
-           DerivedItem%update_alarm = simpleAlarm(current_time,tInterval,rc=status)
-           _VERIFY(status)
-           derivedItem%alarmIsEnabled = .true.
-        end if
-     end if
-
-     _RETURN(ESMF_SUCCESS)
-  end subroutine SetRefreshAlarms
 
   function MAPL_ExtDataGridChangeLev(Grid,CF,lm,rc) result(NewGrid)
 

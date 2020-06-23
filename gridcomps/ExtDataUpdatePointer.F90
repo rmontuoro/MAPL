@@ -17,6 +17,7 @@ module MAPL_ExtDataPointerUpdate
       contains
          procedure :: create_from_parameters
          procedure :: check_update
+         procedure :: is_disabled
    end type
 
    contains
@@ -70,5 +71,11 @@ module MAPL_ExtDataPointerUpdate
       working_time = current_time+this%offset
 
    end subroutine check_update
+
+   function is_disabled(this) result(disabled)
+      class(ExtDataPointerUpdate), intent(in) :: this
+      logical :: disabled
+      disabled = this%disabled
+   end function is_disabled
 
 end module MAPL_ExtDataPointerUpdate

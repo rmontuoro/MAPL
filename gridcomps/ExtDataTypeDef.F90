@@ -26,14 +26,12 @@ module MAPL_ExtDataTypeDef
      character(len=ESMF_MAXSTR)   :: name
      character(len=ESMF_MAXSTR)   :: units
      character(len=ESMF_MAXSTR)   :: cyclic
-     character(len=ESMF_MAXSTR)   :: refresh_template
      integer                      :: Trans
      character(len=ESMF_MAXSTR)   :: var
      character(len=ESMF_MAXPATHLEN)   :: file
      logical                      :: hasFileReffTime
      character(len=ESMF_MAXSTR)   :: FileReffTime
 
-     type(ESMF_Time), pointer     :: refresh_time => null()
      logical                      :: isConst
      real                         :: Const
      integer                      :: vartype ! MAPL_FieldItem or MAPL_BundleItem
@@ -55,15 +53,11 @@ module MAPL_ExtDataTypeDef
      ! the corresponding names of the two vector components on file
      character(len=ESMF_MAXSTR)   :: fcomp1, fcomp2
      type(newCFIOitem)            :: fileVars
-     type(SimpleAlarm)            :: update_alarm
 
      integer                      :: pfioCollection_id
      integer                      :: iclient_collection_id
 
      logical                      :: ExtDataAlloc
-     ! time shifting during continuous update
-     type(ESMF_TimeInterval)      :: tshift
-     logical                      :: alarmIsEnabled = .false.
      integer                      :: FracVal = MAPL_ExtDataNullFrac
      ! do we have to do vertical interpolation
      logical                      :: do_VertInterp = .false.
@@ -80,15 +74,9 @@ module MAPL_ExtDataTypeDef
   type DerivedExport
      character(len=ESMF_MAXSTR)     :: name
      character(len=ESMF_MAXPATHLEN) :: expression
-     character(len=ESMF_MAXSTR)     :: refresh_template
      logical                        :: ExtDataAlloc
      logical                        :: masking
-     type(ESMF_Time), pointer       :: refresh_time => null()
-     ! time shifting during continuous update
-     type(ESMF_TimeInterval)      :: tshift
-     type(SimpleAlarm)            :: update_alarm
-     logical                      :: alarmIsEnabled = .false.
-     type(ExtDataPointerUpdate)   :: update_freq
+     type(ExtDataPointerUpdate)     :: update_freq
   end type DerivedExport
 
 

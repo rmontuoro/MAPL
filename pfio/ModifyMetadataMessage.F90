@@ -37,8 +37,11 @@ contains
       integer, optional, intent(out) :: rc
 
       message%collection_id = collection_id
-      if (present(var_map)) message%var_map = var_map
- 
+      if (present(var_map)) then
+         message%var_map = var_map
+      else
+         message%var_map = StringVariableMap() 
+      endif       
       _RETURN(_SUCCESS)
       _UNUSED_DUMMY(unusable)
    end function new_ModifyMetadataMessage

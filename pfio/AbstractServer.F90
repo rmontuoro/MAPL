@@ -50,6 +50,7 @@ module pFIO_AbstractServerMod
       procedure(get_dmessage), deferred :: get_dmessage
       procedure(clear_RequestHandle), deferred :: clear_RequestHandle
       procedure(set_collective_request), deferred :: set_collective_request
+      procedure(create_remote_win), deferred :: create_remote_win
       procedure :: get_status
       procedure :: set_status
       procedure :: get_and_set_status
@@ -66,7 +67,6 @@ module pFIO_AbstractServerMod
       procedure :: put_DataToFile
       procedure :: get_DataFromMem
       procedure :: am_I_reading_PE
-      procedure :: am_I_writing_PE
       procedure :: get_writing_PE
       procedure :: distribute_task
       procedure :: get_communicator
@@ -99,6 +99,12 @@ module pFIO_AbstractServerMod
          integer, optional, intent(out) :: rc
          class(AbstractMessage), pointer :: dmessage
       end function
+
+      subroutine create_remote_win(this,rc)
+         import AbstractServer
+         class(AbstractServer),target,intent(inout) :: this
+         integer, optional, intent(out) :: rc
+      end subroutine create_remote_win
 
    end interface
 
@@ -301,17 +307,6 @@ contains
       yes = (node_rank   == this%Node_Rank) .and. &
             (innode_rank == this%InNode_Rank)
    end function am_I_reading_PE
-
-   ! for output writing, each node will chose one innode rank write
-   function am_I_writing_PE(this,id) result (yes)
-      class(AbstractServer),intent(in) :: this
-      integer, intent(in) :: id
-      integer :: node_rank,innode_rank
-      logical :: yes
-
-      call this%distribute_task(id, node_rank,innode_rank)
-      yes = (innode_rank == this%InNode_Rank)
-   end function am_I_writing_PE
 
    ! distribute the task (id) to a specific process (node_rank, innode_rank)
    subroutine distribute_task(this,id, node_rank, innode_rank)

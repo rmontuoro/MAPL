@@ -99,7 +99,6 @@ module pFIO_ServerThreadMod
       procedure :: get_DataFromFile
       procedure :: get_DataFromMem
       procedure :: put_DataToFile
-      procedure :: create_remote_win
       procedure :: read_and_gather
       procedure :: read_and_share
       procedure :: receive_output_data
@@ -480,74 +479,6 @@ contains
       _VERIFY(status)
       _RETURN(_SUCCESS)
    end function read_and_share
-
-   subroutine create_remote_win(this, rc) 
-      class (ServerThread), target, intent(inout) :: this
-      integer, optional, intent(out) :: rc
-      class (AbstractDataReference), pointer :: remotePtr
-      integer :: rank
-      integer(KIND=INT64) :: offset, msize_word
-      integer(KIND=INT64),allocatable :: offsets(:), msize_words(:)
-      type (MessageVectorIterator) :: iter
-      type (StringInteger64MapIterator) :: request_iter
-      class (AbstractMessage), pointer :: msg
-      integer :: collection_counter, collection_total
-      character(len=*),parameter :: Iam = 'create_remote_win'
-
-      this%containing_server%stage_offset = StringInteger64map()
-
-      collection_counter = 0
-      collection_total   = 0
-      !(1) loop to get the total number of collection
-      iter   = this%request_backlog%begin()
-      do while (iter /= this%request_backlog%end())
-         msg => iter%get()
-
-         select type (q=>msg)
-         type is (CollectiveStageDataMessage)
-            request_iter = this%containing_server%stage_offset%find(i_to_string(q%collection_id))
-            if ( request_iter == this%containing_server%stage_offset%end()) then
-               collection_total = collection_total + 1
-               call this%containing_server%stage_offset%insert(i_to_string(q%collection_id),int(collection_total, kind=INT64))
-            endif
-         end select
-         call iter%next()
-      end do
-
-      !(2) loop to get the total size and offset of each collection and request
-      allocate(offsets(collection_total), msize_words(collection_total))
-      offsets = 0
-      offset = 0
-      iter   = this%request_backlog%begin()
-      do while (iter /= this%request_backlog%end())
-         msg => iter%get()
-
-         select type (q=>msg)
-         type is (CollectiveStageDataMessage)
-            collection_counter = this%containing_server%stage_offset%of(i_to_string(q%collection_id))
-            request_iter = this%containing_server%stage_offset%find(i_to_string(q%request_id))
-            if ( request_iter == this%containing_server%stage_offset%end()) then
-               ! insert local offset for each node
-               call this%containing_server%stage_offset%insert(i_to_string(q%request_id),offsets(collection_counter))
-               msize_word = word_size(q%type_kind)*product(int(q%global_count,INT64))
-               offsets(collection_counter) = offsets(collection_counter) + msize_word
-            endif
-         end select
-         call iter%next()
-      end do
-
-      ! (3) allocate the memory
-      msize_words = offsets
-      do collection_counter = 1, collection_total
-         rank = this%containing_server%get_writing_PE(collection_counter)
-         msize_word = msize_words(collection_counter) 
-         call this%containing_server%stage_offset%insert(i_to_string(MSIZE_ID + collection_counter ),msize_word)
-         allocate(remotePtr, source  = RDMAReference(pFIO_INT32,msize_word, this%containing_server%comm, rank ))
-         call this%containing_server%add_DataReference(remotePtr)
-         remotePtr=>null()
-      enddo
-      _RETURN(_SUCCESS)
-   end subroutine create_remote_win
 
    subroutine handle_AddExtCollection(this, message, rc)
       class (ServerThread), target, intent(inout) :: this
@@ -1029,7 +960,7 @@ contains
 
       _ASSERT( associated(this%containing_server), "need server") 
 
-      call this%create_remote_win(rc=status)
+      call this%containing_server%create_remote_win(rc=status)
       _VERIFY(status)
 
       call this%containing_server%receive_output_data(rc=status) 

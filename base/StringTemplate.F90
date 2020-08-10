@@ -113,6 +113,7 @@ contains
             k=k+1
          end if
       enddo
+      _RETURN(_SUCCESS)
 
    end subroutine string_template
 

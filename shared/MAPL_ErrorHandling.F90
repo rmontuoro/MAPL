@@ -91,7 +91,8 @@ contains
       fail = .not. condition
 
       if (fail) then
-         message = get_error_message(status)
+         write(status_string,'(i0)') status
+         message = 'status=' // status_string
          call MAPL_throw_exception(filename, line, message=message)
          if (present(rc)) rc = status
       end if

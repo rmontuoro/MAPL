@@ -614,16 +614,6 @@ CONTAINS
 
    end do PrimaryLoop
 
-#ifdef DEBUG
-   if (MAPL_AM_I_ROOT()) then
-      print *, trim(Iam)//': IMPORT   State during Initialize():'
-      call ESMF_StatePrint ( IMPORT )
-      print *
-      print *, trim(Iam)//': EXPORT   State during Initialize():' 
-      call ESMF_StatePrint ( EXPORT )
-   end if
-#endif
-
 ! Check if we have any files that would need to be vertically interpolated
 ! if so ensure that PS is done first
    allocate(self%primaryOrder(size(self%primary%item)),__STAT__)
@@ -740,7 +730,7 @@ CONTAINS
    type(MAPL_MetaComp), pointer      :: MAPLSTATE
 
    logical                           :: doUpdate_
-   character(len=ESMF_MAXPATHLEN)    :: file_processed, file_processed1, file_processed2
+   character(len=ESMF_MAXPATHLEN)    :: file_processed
    logical                           :: NotSingle
    logical                           :: updateL, updateR, swap
    logical, allocatable              :: doUpdate(:)
@@ -829,7 +819,6 @@ CONTAINS
       call MAPL_TimerOn(MAPLSTATE,"--CheckUpd")
 
       call item%update_freq%check_update(doUpdate_,time,time0,__RC__)
-      !call CheckUpdate(doUpdate_,time,time0,hasRun,primaryItem=item,__RC__)
       doUpdate(i) = doUpdate_ .or. (.not.hasRun)
       call MAPL_TimerOff(MAPLSTATE,"--CheckUpd")
 
@@ -852,11 +841,12 @@ CONTAINS
                IF ( (Ext_Debug > 0) .AND. MAPL_Am_I_Root() ) THEN
                   Write(*,*) '      ExtData Run_: HAS_RUN: NotSingle is true. Update left time (bracket L)'
                ENDIF
-               call UpdateBracketTime(item,time,"L",item%interp_time1, & 
-                    item%time1,file_processed1,self%allowExtrap,rc=status)
+               call item%filestream%get_file_bracket(time,"L",file_processed,item%tindex1,item%interp_time1,rc=status)
+               !call UpdateBracketTime(item,time,"L",item%interp_time1, & 
+                    !item%time1,file_processed1,self%allowExtrap,rc=status)
                _VERIFY(status)
                call set_bracket_time(item,left_time=item%interp_time1)
-               call IOBundle_Add_Entry(IOBundles,item,self%primaryOrder(i),file_processed1,MAPL_ExtDataLeft,item%tindex1,__RC__)
+               call IOBundle_Add_Entry(IOBundles,item,self%primaryOrder(i),file_processed,MAPL_ExtDataLeft,item%tindex1,__RC__)
 
                IF ( (Ext_Debug > 0) .AND. MAPL_Am_I_Root() ) THEN
                   Write(*,*) '      ExtData Run_: HAS_RUN: NotSingle is true. Update right time (bracket R)'    
@@ -866,11 +856,12 @@ CONTAINS
                IF ( (Ext_Debug > 0) .AND. MAPL_Am_I_Root() ) THEN
                   Write(*,*) '      ExtData Run_: HAS_RUN: NotSingle is true. Update right time (bracket R)'    
                ENDIF
-               call UpdateBracketTime(item,time,"R",item%interp_time2, &
-                    item%time2,file_processed2,self%allowExtrap,rc=status)
-               _VERIFY(STATUS)
+               call item%filestream%get_file_bracket(time,"R",file_processed,item%tindex2,item%interp_time2,rc=status)
+               !call UpdateBracketTime(item,time,"R",item%interp_time2, &
+                    !item%time2,file_processed2,self%allowExtrap,rc=status)
+               !_VERIFY(STATUS)
                call set_bracket_time(item,right_time=item%interp_time2)
-               call IOBundle_Add_Entry(IOBundles,item,self%primaryOrder(i),file_processed2,MAPL_ExtDataRight,item%tindex2,__RC__)
+               call IOBundle_Add_Entry(IOBundles,item,self%primaryOrder(i),file_processed,MAPL_ExtDataRight,item%tindex2,__RC__)
 
             else
 
@@ -881,8 +872,8 @@ CONTAINS
                ! just get time on the file
                item%time1 = MAPL_ExtDataGetFStartTime(item,trim(item%file),__RC__)
                item%interp_time1 = item%time1
-               file_processed1 = item%file
-               call IOBundle_Add_Entry(IOBundles,item,self%primaryOrder(i),file_processed1,MAPL_ExtDataLeft,1,__RC__)
+               file_processed = item%file
+               call IOBundle_Add_Entry(IOBundles,item,self%primaryOrder(i),file_processed,MAPL_ExtDataLeft,1,__RC__)
             end if
             call MAPL_TimerOff(MAPLSTATE,"--Bracket")
 
@@ -943,8 +934,9 @@ CONTAINS
 
                call MAPL_TimerOn(MAPLSTATE,'--Bracket')
 
-               call UpdateBracketTime(item,time,"R",item%interp_time2, &
-                    item%time2,file_processed,self%allowExtrap,rc=status)
+               call item%filestream%get_file_bracket(time,"R",file_processed,item%tindex2,item%interp_time2,rc=status)
+               !call UpdateBracketTime(item,time,"R",item%interp_time2, &
+                    !item%time2,file_processed,self%allowExtrap,rc=status)
                _VERIFY(STATUS)
                call set_bracket_time(item,right_time=item%interp_time2)
                call IOBundle_Add_Entry(IOBundles,item,self%primaryOrder(i),file_processed,MAPL_ExtDataRight,item%tindex2,__RC__)
@@ -961,9 +953,10 @@ CONTAINS
 
                call MAPL_TimerOn(MAPLSTATE,'--Bracket')
 
-               call UpdateBracketTime(item,time,"L",item%interp_time1, &
-                    item%time1,file_processed,self%allowExtrap,rc=status)
-               _VERIFY(STATUS)
+               call item%filestream%get_file_bracket(time,"L",file_processed,item%tindex1,item%interp_time1,rc=status)
+               !call UpdateBracketTime(item,time,"L",item%interp_time1, &
+                    !item%time1,file_processed,self%allowExtrap,rc=status)
+               _VERIFY(status)
                call set_bracket_time(item,left_time=item%interp_time1)
                call IOBundle_Add_Entry(IOBundles,item,self%primaryOrder(i),file_processed,MAPL_ExtDataLeft,item%tindex1,__RC__)
 
@@ -1089,7 +1082,6 @@ CONTAINS
 
       call derivedItem%update_freq%check_update(doUpdate_,time,time0,__RC__)
       doUpdate_ = doUpdate_ .or. (.not.hasRun)
-      !call CheckUpdate(doUpdate_,time,time0,hasRun,derivedItem=deriveditem,__RC__)
 
       if (doUpdate_) then
 
@@ -1920,24 +1912,7 @@ CONTAINS
            if (allocated(xTseries)) deallocate(xTseries)
            call fdata%get_time_info(timeVector=xTSeries,__RC__)
 
-           ! We now have a time which, when passed to the FILE TEMPLATE, returns a valid file
-           ! However, if the file template does not include a year token, then the file in
-           ! question could actually be for a different year. We therefore feed the file time
-           ! into the refresh template and see if the result has the same year. If it doesn't,
-           ! then we can assume that the year is actually fixed, and the times in the file will
-           ! correspond to the year in the refresh template. In this case, an additional year 
-           ! offset must be applied.
            yrOffsetStamp = 0
-           !buff = trim(item%refresh_template)
-           !buff = ESMF_UtilStringLowerCase(buff, __RC__)
-           !If (buff /= "0" .and. index(buff,"p")==0) Then
-              !newTime = timestamp_(fTime,item%refresh_template,__RC__)
-              !if (newTime .ne. fTime) Then
-                 !call ESMF_TimeGet(fTime,yy=iyr,mm=imm,dd=idd,h=ihr,m=imn,s=isc,__RC__)
-                 !call ESMF_TimeGet(newTime,yy=fyr,mm=fmm,dd=fdd,h=fhr,m=fmn,s=fsc,__RC__)
-                 !yrOffsetStamp = fYr - iYr
-              !End If
-           !End If
 
            ! try to get bracketing time on file using current time
            call GetBracketTimeOnFile(fdata,xTSeries,readTime,bSide,UniFileClim,interpTime,fileTime,tindex,yrOffsetInt=yrOffset+yrOffsetStamp,rc=status)
@@ -2045,34 +2020,7 @@ CONTAINS
               if (allocated(xTSeries)) deallocate(xTSeries)
               call fdata%get_time_info(timeVector=xTSeries,__RC__)
 
-              !If (Mapl_Am_I_Root()) Write (*,'(a,a,x,a)') ' SUPERDEBUG: File/template: ',Trim(file_processed),Trim(item%refresh_template)
-              ! The file template may be "hiding" a year offset from us
               yrOffsetStamp = 0
-              !buff = trim(item%refresh_template)
-              !buff = ESMF_UtilStringLowerCase(buff, __RC__)
-              !If (buff /= "0" .and. index(buff,"p")==0 ) Then
-                 !newTime = timestamp_(fTime,item%refresh_template,__RC__)
-                 !If (Mapl_Am_I_Root().and.Ext_Debug > 0) Then
-                    !call ESMF_TimeGet(fTime,yy=iyr,mm=imm,dd=idd,h=ihr,m=imn,s=isc,__RC__)
-                    !call ESMF_TimeGet(newTime,yy=fyr,mm=fmm,dd=fdd,h=fhr,m=fmn,s=fsc,__RC__)
-
-                    !Write(*,'(3a,I0.4,5(a,I0.2),a,I0.4,5(a,I0.2),2a)') '            UpdateBracketTime: Template ',Trim(item%refresh_template),' applied: ',&
-                    !iyr,'-',imm,'-',idd,' ',ihr,':',imn,':',isc,' -> ',&
-                    !fyr,'-',fmm,'-',fdd,' ',fhr,':',fmn,':',fsc,&
-                    !' on file ',Trim(file_processed)
-
-                 !End If
-                 !if (newTime .ne. fTime) Then
-                    !call ESMF_TimeGet(fTime,yy=iyr,mm=imm,dd=idd,h=ihr,m=imn,s=isc,__RC__)
-                    !call ESMF_TimeGet(newTime,yy=fyr,mm=fmm,dd=fdd,h=fhr,m=fmn,s=fsc,__RC__)
-                    !yrOffsetStamp = fYr - iYr
-
-                    !If (Mapl_Am_I_Root().and.Ext_Debug > 0) Then
-                       !Write(*,'(2(a,I4),2a)') '            UpdateBracketTime: Year offset modified from ',yrOffset,' to ',yrOffset+yrOffsetStamp,' to satisfy refresh template for ', Trim(file_processed)
-                    !End If
-
-                 !End If
-              !End If
 
               ! try to get bracketing time on file using new time
               call GetBracketTimeOnFile(fdata,xTSeries,readTime,bSide,UniFileClim,interpTime,fileTime,tindex,yrOffsetInt=yrOffset+yrOffsetStamp,rc=status)

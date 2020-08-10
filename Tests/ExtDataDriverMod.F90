@@ -141,6 +141,7 @@ contains
          call i_Clients%terminate()
          call o_Clients%terminate()
       end select
+      call MAPL_Finalize(comm=commCap)
 
       call MPI_Barrier(CommCap,status)
       _VERIFY(STATUS) 

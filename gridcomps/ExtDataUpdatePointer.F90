@@ -47,6 +47,7 @@ module MAPL_ExtDataPointerUpdate
          this%update_alarm = simpleAlarm(reference_time,reference_freq,__RC__)
       end if
       this%offset=string_to_esmf_timeinterval(update_offset,__RC__)
+      _RETURN(_SUCCESS)
 
    end subroutine create_from_parameters
 

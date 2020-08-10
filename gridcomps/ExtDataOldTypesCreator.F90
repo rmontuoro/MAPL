@@ -122,6 +122,9 @@ module MAPL_ExtDataOldTypesCreator
       ! file_template
       primary_item%isConst = .false.
       dataset => this%file_stream_map%at(trim(rule%file_template_key))
+
+      primary_item%filestream = ExtDataFileSeries(dataset,time,__RC__)
+
       primary_item%file = dataset%file_template
       if (primary_item%file(1:9) == '/dev/null') then
          primary_item%isConst = .true.

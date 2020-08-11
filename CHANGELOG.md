@@ -8,19 +8,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+- Added routine to finalize the ioservers so that it can be called by another application using cap, like JEDI
+
+### Changed
+
+- Moved more code to use pFlogger
+- Update to ESMA_cmake v3.1.2
+- Update GitHub Actions to use Ubuntu 20/GCC 10 image
+
+### Fixed
+
+- Removed non-standard OpenMP pragma
+- Fixed problem with name mangling in ACG
+- Fix MAPL comm bug with NUOPC
+- Fixed pointer issue exposed by GNU
+- Fixed ESMF logging errors with non-72-level runs (#480)
+- Remove unneeded `use Env;` in stub generator
+
+### Removed
+
+## [2.2.7] - 2020-06-26
+
+### Changed
+
+- Update to ESMA_env v2.1.6
+
+## [2.2.6] - 2020-06-26
+
+### Fixed
+
+- Fixed double timers from profiler (#472)
+
+## [2.2.5] - 2020-06-24
+
+### Fixed
+
+- Fix for the `_VERIFY()` macro (#464)
+
+## [2.2.4] - 2020-06-23
+
+### Fixed
+
+- Fix to `sun.H` to allow CFMIP SCM cases to run
+
+## [2.2.3] - 2020-06-23
+
+### Added
+
+- CMake option BUILD_WITH_FLAP which is default ON.  When set to OFF, the build
+  skips layers that require FLAP.  (Supports GCHP)
+
+## [2.2.2] - 2020-06-22
+
+### Changed
+
+- Updated Github Actions to not build GCM if trivial PR
+
+## [2.2.1] - 2020-06-22
+
+### Fixed
+
+- Fixed Python ACG to work with Python 2.x
+
+## [2.2.0] - 2020-06-22
+
+### Added
+
 - Added LLC grid factory
 - Added support for wildcard expansions (using regex)
 - Added "public" for 2 interfaces: ESMFL_Diff, and ESMFL_statistics
-
 - Added support for sampling along a 1-D timeseries in History
 - Introduced generic subdirectory
 - String.F90 - encapsulates deferred length strings
 - Added target "build-tests" that will build all tests.  This will enable
   ctest to be more selective about which tests.
+- Added ability of MAPL_GridCompGetFriendlies to recurse its children
+- Added `esma_add_subdirectory(ESMA_env)` to `CMakeLists.txt` to allow
+  installation of various files to the `bin` and `etc` directories under
+  install prefix
+- Added wildcard support for short name in automatic code generator for
+  gridded components.
+- Added new CI test for building GCM on pull request
 
-- Added ability of MAPL_GridCompGetFriendlies to recurse its children 
 
 ### Changed
+
 - Refactored aliases in python automatic code generator.  Now aliases
   are tailored per column.  This allows T/F to be safely used as
   aliases for .true./.false. without risking things like the short
@@ -35,23 +108,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Update `components.yaml` to use `NOINSTALL`
     - ESMA_cmake v3.0.6
     - ecbuild geos/v1.0.5
+- Renamed MAPL_Profiler executable demo.x to profiler.x
 - Renamed directories.   Sub-libraries now named MAPL.<sub>
   
   - `./MAPL_Base` => `./base` (`MAPL.base`)
   - `./GMAO_pFIO` => `./pfio`
   - `./MAPL_Profiler` => `./profiler`
   - `./MAPL_Shared` => `./shared`  
+    
+- Updated `components.yaml` to use `ESMA_env` and `ESMA_cmake` if
+  building MAPL as standalone
 
-### Fixed
 ### Removed
 
 - Removed duplicate `Python` directory
 - Removed CircleCI
 
-### Added
+## [2.1.6] - 2020-07-08
 
-- Added new CI test for building GCM on pull request
-- 
+### Changed
+
+- Updates for JEDI/ecbuild compatibility
+  - Updates to CMake to use `NOINSTALL`
+  - Updates to `components.yaml` to support use of `NOINSTALL`
+
 ## [2.1.5] - 2020-06-11
 
 ### Changed
@@ -131,6 +211,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Removed `checkout_externals` code in `CMakeLists.txt`
 
 ### Added
+- Added record capabilites for the History restarts
 
 - Added configuration for CircleCI and Github Actions
   - Builds MAPL using GCC 9.2.0 and Open MPI 4.0.2
@@ -139,7 +220,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Imported Python/MAPL subdir (old, but never imported to GitHub)
 - Python automatic code generator for grid comp include files	
 - Added support to use pFlogger for logging
-  - Command line option: --logging_config=<file>
+  - Command line option: `--logging_config=<file>`
+- Added ability for History to do monthly mean. This also involves reading and writing MAPL_GenericCpl checkpoints
 
 ## [2.0.6] - 2020-04-15
 
@@ -173,13 +255,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix for handling coarse grids at high-resolution in ExtData
 
-## [2.0.1] - 2019-03-02
+## [2.0.1] - 2020-03-02
 
 ### Fixed
 
 - Restoring functionality with the tripolar grid that was lost when the develop branch was merged into master for version 2.0.0
 
-## [2.0.0] - 2019-02-07
+## [2.0.0] - 2020-02-07
 
 ### Added
 

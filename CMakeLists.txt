@@ -4,11 +4,11 @@ cmake_policy (SET CMP0054 NEW)
 
 project (
   MAPL
-  VERSION 2.1.5
+  VERSION 2.2.7
   LANGUAGES Fortran CXX C)  # Note - CXX is required for ESMF
 
-if (EXISTS ${CMAKE_CURRENT_LIST_DIR}/@cmake)
-  list (APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/@cmake")
+if (EXISTS ${CMAKE_CURRENT_LIST_DIR}/ESMA_cmake)
+  list (APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/ESMA_cmake")
   include (esma)
 else ()
   if (NOT COMMAND esma) # build as standalone project
@@ -28,10 +28,12 @@ else ()
     endif()
     option (SKIP_MEPO "Set to skip mepo steps" ON)
 
-    list (APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/@cmake")
+    list (APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/ESMA_cmake")
     include (esma)
   endif()
 endif()
+
+option(BUILD_WITH_FLAP "Use FLAP for command line processing" ON)
 
 ecbuild_declare_project()
 
@@ -49,7 +51,6 @@ add_subdirectory (include)
 add_subdirectory (base)
 add_subdirectory (gridcomps)
 add_subdirectory (MAPL)
-add_subdirectory (@env)
 
 if (PFUNIT_FOUND)
   add_subdirectory (MAPL_pFUnit EXCLUDE_FROM_ALL)
@@ -62,6 +63,9 @@ include(mapl_create_stub_component)
 add_subdirectory (Apps)
 
 add_subdirectory (Tests)
+
+# @env will exist here if MAPL is built as itself but not as part of, say, GEOSgcm
+esma_add_subdirectory (ESMA_env FOUND ESMA_env_FOUND)
 
 # Install the Python directory
 install (

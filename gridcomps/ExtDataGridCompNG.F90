@@ -1470,7 +1470,7 @@ CONTAINS
               ! just put a time in so we can evaluate the template to open a file
               nymd = 20000101
               nhms = 0
-              call string_template(file,item%file,nymd=nymd,nhms=nhms,__RC__)
+              call fill_grads_template(file,item%file,nymd=nymd,nhms=nhms,__RC__)
            end if
            call MakeMetadata(file,item%pfioCollection_id,metadata,__RC__)
            call metadata%get_time_info(startYear=iyr)
@@ -1531,7 +1531,7 @@ CONTAINS
            end if
            call MAPL_PackTime(nymd,iyr,imm,idd)
            call MAPL_PackTime(nhms,ihr,imn,iss)
-           call string_template(file,item%file,nymd=nymd,nhms=nhms,__RC__)
+           call fill_grads_template(file,item%file,nymd=nymd,nhms=nhms,__RC__)
            Inquire(file=trim(file),EXIST=found)
 
         end if
@@ -1551,7 +1551,7 @@ CONTAINS
                  call ESMF_TimeGet(fTime,yy=iyr,mm=imm,dd=idd,h=ihr,m=imn,s=iss,__RC__)
                  call MAPL_PackTime(nymd,iyr,imm,idd)
                  call MAPL_PackTime(nhms,ihr,imn,iss)
-                 call string_template(file,item%file,nymd=nymd,nhms=nhms,__RC__)
+                 call fill_grads_template(file,item%file,nymd=nymd,nhms=nhms,__RC__)
                  Inquire(file=trim(file),exist=lfound)
                  intOK = (abs(iYr-refYear)<maxOffset)
                  if (.not.lfound) then
@@ -1751,7 +1751,7 @@ CONTAINS
            call ESMF_TimeGet(fTime,yy=iyr,mm=imm,dd=idd,h=ihr,m=imn,s=isc,__RC__)
            call MAPL_PackTime(curDate,iyr,imm,idd)
            call MAPL_PackTime(curTime,ihr,imn,isc)
-           call string_template(file_processed,item%file,nymd=curDate,nhms=curTime,__RC__)
+           call fill_grads_template(file_processed,item%file,nymd=curDate,nhms=curTime,__RC__)
            Inquire(FILE=trim(file_processed),EXIST=found)
            If (found) Then
               if (mapl_am_I_root().and.(Ext_Debug > 0)) Then 
@@ -1787,7 +1787,7 @@ CONTAINS
                  call ESMF_TimeGet(fTime,yy=iyr,mm=imm,dd=idd,h=ihr,m=imn,s=isc,__RC__)
                  call MAPL_PackTime(curDate,iyr,imm,idd)
                  call MAPL_PackTime(curTime,ihr,imn,isc)
-                 call string_template(file_processed,item%file,nymd=curDate,nhms=curTime,__RC__)
+                 call fill_grads_template(file_processed,item%file,nymd=curDate,nhms=curTime,__RC__)
                  Inquire(FILE=trim(file_processed),EXIST=found)
                  yrOffset = iYr-refYear
                  intOK = (abs(yrOffset)<maxOffset)
@@ -1847,7 +1847,7 @@ CONTAINS
                  ! Build file name
                  call MAPL_PackTime(curDate,iyr,imm,idd)
                  call MAPL_PackTime(curTime,ihr,imn,isc)
-                 call string_template(file_processed,item%file,nymd=curDate,nhms=curTime,__RC__)
+                 call fill_grads_template(file_processed,item%file,nymd=curDate,nhms=curTime,__RC__)
                  If (MAPL_Am_I_Root().and.(Ext_Debug > 0)) Then
                     Write(*,'(a,a,a,I0.4,5(a,I0.2))') '            UpdateBracketTime: Testing for file ', &
                     trim(file_processed), ' for target time ',iYr,'-',iMm,'-',iDd,' ',iHr,':',iMn,':',iSc
@@ -1886,7 +1886,7 @@ CONTAINS
                     call ESMF_TimeGet(fTime,yy=iyr,mm=imm,dd=idd,h=ihr,m=imn,s=isc,__RC__)
                     call MAPL_PackTime(curDate,iyr,imm,idd)
                     call MAPL_PackTime(curTime,ihr,imn,isc)
-                    call string_template(file_processed,item%file,nymd=curDate,nhms=curTime,__RC__)
+                    call fill_grads_template(file_processed,item%file,nymd=curDate,nhms=curTime,__RC__)
                     Inquire(FILE=trim(file_processed),EXIST=found)
                  End Do
                  If (.not.found) Then
@@ -1954,7 +1954,7 @@ CONTAINS
 
                     call MAPL_PackTime(curDate,iyr,imm,idd)
                     call MAPL_PackTime(curTime,ihr,imn,isc)
-                    call string_template(file_processed,item%file,nymd=curDate,nhms=curTime,__RC__)
+                    call fill_grads_template(file_processed,item%file,nymd=curDate,nhms=curTime,__RC__)
 
                     If (MAPL_Am_I_Root().and.(Ext_Debug > 0)) Write(*,'(a,a,a,I0.4,5(a,I0.2))') '            UpdateBracketTime: Testing for file ', trim(file_processed), ' for target time ',iYr,'-',iMm,'-',iDd,' ',iHr,':',iMn,':',iSc
 
@@ -1995,7 +1995,7 @@ CONTAINS
 
                     call MAPL_PackTime(curDate,iyr,imm,idd)
                     call MAPL_PackTime(curTime,ihr,imn,isc)
-                    call string_template(file_processed,item%file,nymd=curDate,nhms=curTime,__RC__)
+                    call fill_grads_template(file_processed,item%file,nymd=curDate,nhms=curTime,__RC__)
                     Inquire(FILE=trim(file_processed),EXIST=found)
                     If (found) Then
                        fTime = newTime

@@ -8,11 +8,8 @@ set (srcs
 
 include_directories (${INC_ESMF})
 
-#add_executable (ExtDataDriver.x ${srcs})
-ecbuild_add_executable (TARGET ExtDataDriver.x SOURCES ${srcs})
-
-#install(PROGRAMS ExtDataDriver.x DESTINATION bin)
-
-target_link_libraries (ExtDataDriver.x MAPL MAPL.gridcomps ${MKL_LIBRARIES} ${OpenMP_Fortran_LIBRARIES})
-set_target_properties(ExtDataDriver.x PROPERTIES LINK_FLAGS "${OpenMP_Fortran_FLAGS}")
-    
+if (BUILD_WITH_FLAP)
+  ecbuild_add_executable (TARGET ExtDataDriver.x SOURCES ${srcs})
+  target_link_libraries (ExtDataDriver.x MAPL MAPL.gridcomps FLAP::FLAP ${MKL_LIBRARIES} ${OpenMP_Fortran_LIBRARIES})
+  set_target_properties(ExtDataDriver.x PROPERTIES LINK_FLAGS "${OpenMP_Fortran_FLAGS}")
+endif ()

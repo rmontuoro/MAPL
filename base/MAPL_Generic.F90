@@ -316,7 +316,12 @@ module MAPL_GenericMod
   
   interface MAPL_CheckpointState
      module procedure MAPL_ESMFStateWriteToFile
-  end interface
+  end interface MAPL_CheckpointState
+
+  interface MAPL_GetLogger
+     module procedure MAPL_GetLogger_gc
+     module procedure MAPL_GetLogger_meta
+  end interface MAPL_GetLogger
 
   include "mpif.h"
   
@@ -1435,7 +1440,7 @@ endif
 
       if(STATUS==ESMF_SUCCESS) then
          ! if the filename is tempate
-         call string_template(filename,trim(adjustl(FILEtpl)),experiment_id=trim(id_string), nymd=yyyymmdd,nhms=hhmmss,rc=status)
+         call fill_grads_template(filename,trim(adjustl(FILEtpl)),experiment_id=trim(id_string), nymd=yyyymmdd,nhms=hhmmss,rc=status)
          STATE%RECORD%INT_FNAME = FILENAME
          STATE%RECORD%INT_LEN = LEN_TRIM(FILENAME)
       else
@@ -1475,8 +1480,6 @@ endif
                call ESMF_GridCompGet( STATE%GCS(I), NAME=CHILD_NAME, RC=STATUS )
                _VERIFY(STATUS)
       
-               t_p => get_global_time_profiler()
-               call t_p%start(trim(CHILD_NAME),__RC__)
                call MAPL_GenericStateClockOn (STATE,trim(CHILD_NAME))
                call ESMF_GridCompInitialize (STATE%GCS(I), &
                     importState=STATE%GIM(I), &
@@ -1485,7 +1488,6 @@ endif
                     userRC=userRC, RC=STATUS )
                _ASSERT(userRC==ESMF_SUCCESS .and. STATUS==ESMF_SUCCESS,'needs informative message')
                call MAPL_GenericStateClockOff(STATE,trim(CHILD_NAME))
-               call t_p%stop(trim(CHILD_NAME),__RC__)
             end if
          end do
          deallocate(CHLDMAPL)
@@ -1601,7 +1603,7 @@ endif
 
       if(STATUS==ESMF_SUCCESS) then
         ! if the filename is tempate
-         call string_template(filename,trim(adjustl(FILEtpl)),experiment_id=trim(id_string), &
+         call fill_grads_template(filename,trim(adjustl(FILEtpl)),experiment_id=trim(id_string), &
          nymd=yyyymmdd,nhms=hhmmss,rc=status)
          call MAPL_GetResource( STATE   , hdr,         &
                                  default=0, &
@@ -2111,7 +2113,7 @@ recursive subroutine MAPL_GenericFinalize ( GC, IMPORT, EXPORT, CLOCK, RC )
 
      if(STATUS==ESMF_SUCCESS) then
         ! if the filename is tempate
-        call string_template(filename,trim(adjustl(filetpl)),experiment_id=trim(id_string), nymd=yyyymmdd,nhms=hhmmss,rc=status)
+        call fill_grads_template(filename,trim(adjustl(filetpl)),experiment_id=trim(id_string), nymd=yyyymmdd,nhms=hhmmss,rc=status)
         call    MAPL_GetResource( STATE, FILETYPE, LABEL="INTERNAL_CHECKPOINT_TYPE:",                RC=STATUS )
         if ( STATUS/=ESMF_SUCCESS  .or.  FILETYPE == "default" ) then
            call MAPL_GetResource( STATE, FILETYPE, LABEL="DEFAULT_CHECKPOINT_TYPE:", default='pnc4', RC=STATUS )
@@ -2292,7 +2294,6 @@ end subroutine MAPL_GenericFinalize
   _VERIFY(STATUS)
 
   t_p => get_global_time_profiler()
-  call t_p%start(trim(state%compname),__RC__)
   call state%t_profiler%start(__RC__)
   call state%t_profiler%start('Record',__RC__)
 
@@ -2392,7 +2393,6 @@ end subroutine MAPL_GenericFinalize
 
   call state%t_profiler%stop('Record',__RC__)
   call state%t_profiler%stop(__RC__)
-  call t_p%stop(trim(state%compname),__RC__)
 
   _RETURN(ESMF_SUCCESS)
 end subroutine MAPL_GenericRecord
@@ -2517,7 +2517,6 @@ end subroutine MAPL_StateRecord
   _VERIFY(STATUS)
 
   t_p => get_global_time_profiler()
-  call t_p%start(trim(state%compname),__RC__)
   call state%t_profiler%start(__RC__)
   call state%t_profiler%start('Refresh',__RC__)
 
@@ -2605,7 +2604,6 @@ end subroutine MAPL_StateRecord
   call state%t_profiler%stop('Refresh_self',__RC__)
   call state%t_profiler%stop('Refresh',__RC__)
   call state%t_profiler%stop(__RC__)
-  call t_p%stop(trim(state%compname),__RC__)
 
   _RETURN(ESMF_SUCCESS)
 end subroutine MAPL_GenericRefresh
@@ -10406,7 +10404,17 @@ end subroutine MAPL_READFORCINGX
 
    end subroutine ArrDescrSetNCPar
 
-   subroutine MAPL_GetLogger(gc, lgr, rc)
+   subroutine MAPL_GetLogger_meta(meta, lgr, rc)
+      type (MAPL_MetaComp), intent(in) :: meta
+      class(Logger), pointer :: lgr
+      integer, optional, intent(out) :: rc
+
+      lgr => meta%lgr
+
+      _RETURN(_SUCCESS)
+   end subroutine MAPL_GetLogger_meta
+
+   subroutine MAPL_GetLogger_gc(gc, lgr, rc)
       type(ESMF_GridComp), intent(inout) :: gc
       class(Logger), pointer :: lgr
       integer, optional, intent(out) :: rc
@@ -10417,9 +10425,11 @@ end subroutine MAPL_READFORCINGX
       call MAPL_GetObjectFromGC(gc, meta, rc=status)
       _VERIFY(status)
 
-      lgr => meta%lgr
+      call MAPL_GetLogger(meta, lgr, rc=status)
+      _VERIFY(status)
+
       _RETURN(_SUCCESS)
-   end subroutine MAPL_GetLogger
+   end subroutine MAPL_GetLogger_gc
 
    subroutine MAPL_ConnectivityGet(gc, connectivityPtr, RC)
       type(ESMF_GridComp), intent(inout) :: gc

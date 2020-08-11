@@ -144,7 +144,7 @@ contains
 
       n = (target_time-this%reff_time)/this%frequency
       ftime = this%reff_time+(n+shift)*this%frequency
-      call string_template(filename,this%file_template,time=ftime,__RC__)
+      call fill_grads_template(filename,this%file_template,time=ftime,__RC__)
       inquire(file=trim(filename),exist=file_found)
       _ASSERT(file_found,"get_file did not file a file using: "//trim(this%file_template))
       _RETURN(_SUCCESS)

@@ -137,10 +137,8 @@ contains
             call iter%next()
          enddo
 
-         call i_Clients%terminate()
-         call o_Clients%terminate()
+         call this%cap_server%finalize()
       end select
-      call MAPL_Finalize(comm=commCap)
 
       call MPI_Barrier(CommCap,status)
       _VERIFY(STATUS) 
@@ -155,6 +153,7 @@ contains
         close(99)
      end if
     
+      call MAPL_Finalize(comm=commCap)
       call mpi_finalize(status)
       _VERIFY(STATUS)
 

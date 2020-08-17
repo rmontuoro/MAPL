@@ -46,11 +46,14 @@ contains
       type(ExtDataRule) :: rule,ucomp,vcomp
       integer :: status, semi_pos
       character(len=:), allocatable :: uname,vname
+      type(FileStream) :: fstream
 
       _UNUSED_DUMMY(unusable)
 
       p = Parser('core')
-      config = p%load(FileStream(config_file))
+      fstream=FileStream(config_file)
+      config = p%load(fstream)
+      call fstream%close()
 
       ds_config = config%at("data_sets")
       _ASSERT(.not.ds_config%is_none(),"data_sets key not found in ExtData rc file")
@@ -145,11 +148,13 @@ contains
       derived_number=0
       rule => this%rule_map%at(trim(item_name))
       if (associated(rule)) then
-         if (rule%vector_component=='EW') then
-            primary_number=2
-         else if (rule%vector_component=='NS') then
-            primary_number=0
-         else if (rule%vector_component=='') then
+         if (allocated(rule%vector_component)) then
+            if (rule%vector_component=='EW') then
+               primary_number=2
+            else if (rule%vector_component=='NS') then
+               primary_number=0
+            end if
+         else
             primary_number=1
          end if
       end if

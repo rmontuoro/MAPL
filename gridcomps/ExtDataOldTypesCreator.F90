@@ -15,6 +15,8 @@ module MAPL_ExtDataOldTypesCreator
    use MAPL_ExtDataDerived
    use MAPL_ExtDataDerivedMap
    use MAPL_RegridderSpecMod
+   use MAPL_ExtDataAbstractFileHandler
+   use MAPL_ExtDataSimpleFileHandler
    implicit none
    public :: ExtDataOldTypesCreator
 
@@ -58,11 +60,12 @@ module MAPL_ExtDataOldTypesCreator
 
       type(ExtDataRule), pointer :: rule
       type(ExtDataFileStream),  pointer :: dataset
+      type(ExtDataSimpleFileHandler) :: simple_handler
       integer :: status, semi_pos
       logical :: disable_interpolation
 
       rule => this%rule_map%at(trim(item_name))
-      primary_item%isVector = (rule%vector_partner /= '')
+      primary_item%isVector = allocated(rule%vector_partner)
       ! name and file var
       primary_item%name = trim(item_name)
       primary_item%vartype = MAPL_FieldItem
@@ -123,7 +126,9 @@ module MAPL_ExtDataOldTypesCreator
       primary_item%isConst = .false.
       dataset => this%file_stream_map%at(trim(rule%file_template_key))
 
-      primary_item%filestream = ExtDataFileSeries(dataset,time,__RC__)
+      call simple_handler%initialize(dataset,time,__RC__)
+      allocate(primary_item%filestream,source=simple_handler)
+      call primary_item%filestream%initialize(dataset,time,__RC__)
 
       primary_item%file = dataset%file_template
       if (primary_item%file(1:9) == '/dev/null') then

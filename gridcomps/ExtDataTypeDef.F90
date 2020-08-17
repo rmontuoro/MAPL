@@ -4,7 +4,7 @@ module MAPL_ExtDataTypeDef
    use MAPL_newCFIOItemMod
    use MAPL_ExtDataBracket
    use MAPL_ExtDataPointerUpdate
-   use MAPL_ExtDataFileSeries
+   use MAPL_ExtDataAbstractFileHandler
 
    implicit none
 
@@ -37,7 +37,7 @@ module MAPL_ExtDataTypeDef
      real                         :: Const
      integer                      :: vartype ! MAPL_FieldItem or MAPL_BundleItem
 
-     type(ExtDataFileSeries)      :: filestream
+     class(ExtDataAbstractFileHandler), allocatable :: filestream
 
      type(ESMF_FieldBundle)       :: binterp1, binterp2
      type(ESMF_Time)              :: time1, time2

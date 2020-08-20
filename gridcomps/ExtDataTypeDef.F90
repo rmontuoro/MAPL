@@ -72,6 +72,10 @@ module MAPL_ExtDataTypeDef
      character(len=ESMF_MAXSTR)   :: levUnit
      logical                      :: havePressure = .false.
      type(ExtDataPointerUpdate) :: update_freq
+
+     ! new stuff
+     logical                      :: cycling
+     integer, allocatable         :: source_time(:)
   end type PrimaryExport
   
   type DerivedExport

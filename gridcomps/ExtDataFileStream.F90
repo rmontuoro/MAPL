@@ -11,6 +11,7 @@ module MAPL_ExtDataFileStream
       character(:), allocatable :: file_reference_date
       character(:), allocatable :: file_frequency
       character(:), allocatable :: old_file_freq
+      integer, allocatable :: valid_range(:)
       contains 
          procedure :: display
    end type
@@ -36,8 +37,9 @@ contains
       _ASSERT(is_present,"Missing file template in dataset")
       call config%get(data_Set%file_reference_date,"file_reference_time",default='',rc=status)
       _VERIFY(status)
-      call config%get(data_Set%file_frequency,"file_frequency",default='',rc=status)
+      call config%get(data_set%file_frequency,"file_frequency",default='',rc=status)
       _VERIFY(status)
+      data_set%valid_range = config%at("valid_range")
       call config%get(data_Set%old_file_freq,"old_file_freq",default='',rc=status)
       _VERIFY(status)
       _RETURN(_SUCCESS)

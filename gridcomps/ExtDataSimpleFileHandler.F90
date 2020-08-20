@@ -25,10 +25,11 @@ module MAPL_ExtdataSimpleFileHandler
 
 contains
 
-   subroutine get_file_bracket(this, target_time, bracketside, output_file, time_index, output_time, rc)
+   subroutine get_file_bracket(this, target_time, bracketside, source_time, output_file, time_index, output_time, rc)
       class(ExtdataSimpleFileHandler), intent(inout) :: this
       type(ESMF_Time), intent(in) :: target_time
       character(len=*), intent(in) :: bracketside
+      integer, intent(in) :: source_time(:)
       character(len=*), intent(inout) :: output_file
       integer, intent(out) :: time_index
       type(ESMF_Time), intent(out) :: output_time

@@ -9,10 +9,11 @@ module MAPL_ExtDataRule
    type, public :: ExtDataRule
       character(:), allocatable :: file_template_key
       character(:), allocatable :: file_var
-      logical :: allow_extrapolation
+      logical :: allow_cycling
       real :: scaling
       real :: shift
       logical :: time_interpolation
+      integer, allocatable :: source_time(:)
       character(:), allocatable :: climatology
       character(:), allocatable :: regrid_method
       character(:), allocatable :: refresh_time
@@ -52,7 +53,7 @@ contains
       _VERIFY(status)
       _ASSERT(is_present,"Missing file_var in ExtDataRule")
 
-      call config%get(rule%allow_extrapolation,"allow_extrapolation",default=.false.,rc=status)
+      call config%get(rule%allow_cycling,"allow_cycling",default=.false.,rc=status)
       _VERIFY(status)
 
       call config%get(rule%climatology,"climatology",default='N',rc=status)
@@ -81,6 +82,8 @@ contains
 
       call config%get(rule%refresh_template,"refresh_template",default='0',rc=status)
       _VERIFY(status)
+    
+      rule%source_time = config%at('source_time')
 
       _RETURN(_SUCCESS)
    end function new_ExtDataRule_from_yaml
@@ -89,7 +92,7 @@ contains
       class(ExtDataRule) :: this
       write(*,*)"file_template_key: ",trim(this%file_template_key)
       write(*,*)"file_var: ",trim(this%file_var)
-      write(*,*)"allow_extrapolation: ",this%allow_extrapolation
+      write(*,*)"allow_cycling: ",this%allow_cycling
       write(*,*)"scaling: ",this%scaling
       write(*,*)"shift: ",this%shift
       write(*,*)"time_interpolation: ",this%time_interpolation

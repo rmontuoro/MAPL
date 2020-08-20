@@ -21,6 +21,7 @@ module MAPL_ExtdataAbstractFileHandler
       type(ESMF_TimeInterval) :: frequency
       type(ESMF_Time) :: reff_time
       integer :: collection_id
+      integer, allocatable :: valid_range(:)
       contains
          procedure :: initialize 
          procedure :: make_metadata
@@ -29,12 +30,13 @@ module MAPL_ExtdataAbstractFileHandler
    end type
 
    abstract interface
-      subroutine get_file_bracket(this,target_time, bracketside, output_file, time_index, output_time, rc)
+      subroutine get_file_bracket(this,target_time, bracketside, source_time, output_file, time_index, output_time, rc)
          use ESMF
          import ExtDataAbstractFileHandler
          class(ExtDataAbstractFileHandler), intent(inout)  :: this
          type(ESMF_Time), intent(in) :: target_time
          character(len=*), intent(in) :: bracketside
+         integer, intent(in) :: source_time(:)
          character(len=*), intent(inout) :: output_file
          integer, intent(out) :: time_index
          type(ESMF_Time), intent(out) :: output_time
@@ -108,62 +110,12 @@ contains
             this%reff_time = current_time 
          end if
       end if
+      if ( allocated(file_stream%valid_range) .and. (size(file_stream%valid_range) > 0)) then
+         allocate(this%valid_range,source=file_stream%valid_range,__STAT__)
+      end if
       this%collection_id = MAPL_ExtDataAddCollection(this%file_template)
 
    end subroutine initialize
-
-   !subroutine get_file_bracket(this, target_time, bracketside, output_file, time_index, output_time, rc)
-      !class(ExtdataAbstractFileHandler), intent(inout) :: this
-      !type(ESMF_Time), intent(in) :: target_time
-      !character(len=*), intent(in) :: bracketside
-      !character(len=*), intent(inout) :: output_file
-      !integer, intent(out) :: time_index
-      !type(ESMF_Time), intent(out) :: output_time
-      !integer, optional, intent(out) :: rc
-      !integer :: status
-      !type(ESMF_TimeInterval) :: zero
-
-      !call ESMF_TimeIntervalSet(zero,__RC__)      
-      !if (this%frequency == zero) then
-         !output_file = this%file_template
-         !call this%get_time_on_file(output_file,target_time,bracketside,time_index,output_time,__RC__)
-         !output_file = output_file
-      !else
-         !call this%get_file(output_file,target_time,0,__RC__)
-         !call this%get_time_on_file(output_file,target_time,bracketside,time_index,output_time,__RC__)
-         !if (status /=  _SUCCESS) then
-            !if ( bracketside == 'R') then
-               !call this%get_file(output_file,target_time,1,__RC__)
-               !call this%get_time_on_file(output_file,target_time,bracketside,time_index,output_time,__RC__)
-            !else if (bracketside == 'L') then 
-               !call this%get_file(output_file,target_time,-1,__RC__)
-               !call this%get_time_on_file(output_file,target_time,bracketside,time_index,output_time,__RC__)
-            !end if
-         !end if
-      !end if
-      !_RETURN(_SUCCESS)
-   
-   !end subroutine get_file_bracket
-
-   !subroutine get_file(this,filename,target_time,shift,rc)
-      !class(ExtdataAbstractFileHandler), intent(inout) :: this
-      !character(len=*), intent(out) :: filename
-      !type(ESMF_Time) :: target_time
-      !integer, intent(in) :: shift
-      !integer, intent(out), optional :: rc
-
-      !type(ESMF_Time) :: ftime
-      !integer :: n,status
-      !logical :: file_found
-
-      !n = (target_time-this%reff_time)/this%frequency
-      !ftime = this%reff_time+(n+shift)*this%frequency
-      !call fill_grads_template(filename,this%file_template,time=ftime,__RC__)
-      !inquire(file=trim(filename),exist=file_found)
-      !_ASSERT(file_found,"get_file did not file a file using: "//trim(this%file_template))
-      !_RETURN(_SUCCESS)
-
-   !end subroutine get_file
 
    subroutine get_time_on_file(this,filename,target_time,bracketside,time_index,output_time,rc)
       class(ExtdataAbstractFileHandler), intent(inout) :: this

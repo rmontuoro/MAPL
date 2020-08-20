@@ -126,8 +126,12 @@ module MAPL_ExtDataOldTypesCreator
       primary_item%isConst = .false.
       dataset => this%file_stream_map%at(trim(rule%file_template_key))
 
-      call simple_handler%initialize(dataset,time,__RC__)
-      allocate(primary_item%filestream,source=simple_handler)
+      if (primary_item%cycling) then
+         _ASSERT(.false.,'not yet implemented')
+      else
+         call simple_handler%initialize(dataset,time,__RC__)
+         allocate(primary_item%filestream,source=simple_handler)
+      end if
       call primary_item%filestream%initialize(dataset,time,__RC__)
 
       primary_item%file = dataset%file_template
@@ -149,6 +153,10 @@ module MAPL_ExtDataOldTypesCreator
       if (dataset%file_frequency /= '' .or. dataset%file_reference_date /= '') then
          _ASSERT(.false.,'Not yet support')
       end if
+
+      ! newgstuff
+      primary_item%cycling=rule%allow_cycling
+      allocate(primary_item%source_time,source=rule%source_time)
 
       _RETURN(_SUCCESS)
 

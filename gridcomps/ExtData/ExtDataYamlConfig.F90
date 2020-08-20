@@ -15,6 +15,7 @@ module MAPL_ExtDataYamlConfig
    type, public :: ExtDataYamlConfig
       integer :: debug
       logical :: allow_extrapolation
+      character(len=:), allocatable :: config_file
       type(ExtDataRuleMap) :: rule_map
       type(ExtDataDerivedMap) :: derived_map
       type(ExtDataFileStreamMap) :: file_stream_map
@@ -54,6 +55,7 @@ contains
       fstream=FileStream(config_file)
       config = p%load(fstream)
       call fstream%close()
+      ext_config%config_file=config_file
 
       ds_config = config%at("data_sets")
       _ASSERT(.not.ds_config%is_none(),"data_sets key not found in ExtData rc file")

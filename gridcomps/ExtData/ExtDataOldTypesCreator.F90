@@ -4,6 +4,7 @@
 module MAPL_ExtDataOldTypesCreator
    use ESMF
    use MAPL_BaseMod
+   use yafYaml
    use MAPL_KeywordEnforcerMod
    use MAPL_ExceptionHandling
    use MAPL_ExtDataTypeDef
@@ -60,6 +61,9 @@ module MAPL_ExtDataOldTypesCreator
 
       type(ExtDataRule), pointer :: rule
       type(ExtDataFileStream),  pointer :: dataset
+      type(Parser)              :: p
+      type(FileStream) :: fstream
+      type(Configuration) :: config, ds_config,my_config
       type(ExtDataSimpleFileHandler) :: simple_handler
       integer :: status, semi_pos
       logical :: disable_interpolation
@@ -126,13 +130,17 @@ module MAPL_ExtDataOldTypesCreator
       primary_item%isConst = .false.
       dataset => this%file_stream_map%at(trim(rule%file_template_key))
 
+      p = Parser('core')
+      fstream=FileStream(this%config_file)
+      config = p%load(fstream)
+      ds_config = config%at("data_sets")
+      my_config = ds_config%at(trim(rule%file_template_key))
       if (primary_item%cycling) then
          _ASSERT(.false.,'not yet implemented')
       else
-         call simple_handler%initialize(dataset,time,__RC__)
+         call simple_handler%initialize(my_config,time,__RC__)
          allocate(primary_item%filestream,source=simple_handler)
       end if
-      call primary_item%filestream%initialize(dataset,time,__RC__)
 
       primary_item%file = dataset%file_template
       if (primary_item%file(1:9) == '/dev/null') then

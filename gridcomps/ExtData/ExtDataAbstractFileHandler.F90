@@ -2,6 +2,7 @@
 #include "MAPL_ErrLog.h"
 module MAPL_ExtdataAbstractFileHandler
    use ESMF
+   use yafYaml
    use MAPL_KeywordEnforcerMod
    use MAPL_ExceptionHandling
    use MAPL_ExtDataFileStream
@@ -48,9 +49,9 @@ module MAPL_ExtdataAbstractFileHandler
 
 contains
 
-   subroutine initialize(this,file_stream,current_time,unusable,rc)
+   subroutine initialize(this,config,current_time,unusable,rc)
       class(ExtDataAbstractFileHandler), intent(inout)  :: this
-      type(ExtDataFileStream), intent(in) :: file_stream
+      type(Configuration), intent(in) :: config
       type(ESMF_Time), intent(in) :: current_time
       class(KeywordEnforcer), optional, intent(in) :: unusable
       integer, optional, intent(out) :: rc
@@ -59,14 +60,19 @@ contains
       integer :: last_token
       integer :: iyy,imm,idd,ihh,imn,isc 
       character(len=2) :: token
+      character(len=:), allocatable :: file_frequency, file_reff_time
+      logical :: is_present
 
       _UNUSED_DUMMY(unusable)
 
-      this%file_template = file_stream%file_template
-      if (file_stream%file_frequency /= '') then
-         this%frequency = string_to_esmf_timeinterval(file_stream%file_frequency)
+      call config%get(this%file_template,"file_template",default='',is_present=is_present,rc=status)
+      _VERIFY(status)
+      call config%get(file_frequency,"file_frequency",default='',rc=status)
+      _VERIFY(status)
+      if (file_frequency /= '') then
+         this%frequency = string_to_esmf_timeinterval(file_frequency)
       else
-         last_token = index(file_stream%file_template,'%',back=.true.)
+         last_token = index(this%file_template,'%',back=.true.)
          if (last_token.gt.0) then
             token = this%file_template(last_token+1:last_token+2)
             select case(token)
@@ -87,10 +93,12 @@ contains
          end if
       end if
 
-      if (file_stream%file_reference_date /= '') then
-         this%reff_time = string_to_esmf_time(file_stream%file_reference_date)
+      call config%get(file_reff_time,"file_reference_time",default='',rc=status)
+      _VERIFY(status)
+      if (file_reff_time /= '') then
+         this%reff_time = string_to_esmf_time(file_reff_time)
       else
-         last_token = index(file_stream%file_template,'%',back=.true.)
+         last_token = index(this%file_template,'%',back=.true.)
          if (last_token.gt.0) then
             call ESMF_TimeGet(current_time, yy=iyy, mm=imm, dd=idd,h=ihh, m=imn, s=isc  ,__RC__)
             token = this%file_template(last_token+1:last_token+2)
@@ -110,9 +118,8 @@ contains
             this%reff_time = current_time 
          end if
       end if
-      if ( allocated(file_stream%valid_range) .and. (size(file_stream%valid_range) > 0)) then
-         allocate(this%valid_range,source=file_stream%valid_range,__STAT__)
-      end if
+
+      this%valid_range = config%at("valid_range")
       this%collection_id = MAPL_ExtDataAddCollection(this%file_template)
 
    end subroutine initialize

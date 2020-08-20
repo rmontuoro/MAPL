@@ -30,8 +30,6 @@ module MAPL_ExtDataTypeDef
      integer                      :: Trans
      character(len=ESMF_MAXSTR)   :: var
      character(len=ESMF_MAXPATHLEN)   :: file
-     logical                      :: hasFileReffTime
-     character(len=ESMF_MAXSTR)   :: FileReffTime
 
      logical                      :: isConst
      real                         :: Const

@@ -49,77 +49,20 @@ module MAPL_ExtdataAbstractFileHandler
 
 contains
 
-   subroutine initialize(this,config,current_time,unusable,rc)
+   subroutine initialize(this,file_series,unusable,rc)
       class(ExtDataAbstractFileHandler), intent(inout)  :: this
-      type(Configuration), intent(in) :: config
-      type(ESMF_Time), intent(in) :: current_time
+      type(ExtDataFileStream), intent(in) :: file_series
       class(KeywordEnforcer), optional, intent(in) :: unusable
       integer, optional, intent(out) :: rc
 
       integer :: status
-      integer :: last_token
-      integer :: iyy,imm,idd,ihh,imn,isc 
-      character(len=2) :: token
-      character(len=:), allocatable :: file_frequency, file_reff_time
-      logical :: is_present
 
       _UNUSED_DUMMY(unusable)
 
-      call config%get(this%file_template,"file_template",default='',is_present=is_present,rc=status)
-      _VERIFY(status)
-      call config%get(file_frequency,"file_frequency",default='',rc=status)
-      _VERIFY(status)
-      if (file_frequency /= '') then
-         this%frequency = string_to_esmf_timeinterval(file_frequency)
-      else
-         last_token = index(this%file_template,'%',back=.true.)
-         if (last_token.gt.0) then
-            token = this%file_template(last_token+1:last_token+2)
-            select case(token)
-            case("y4")
-               call ESMF_TimeIntervalSet(this%frequency,yy=1,__RC__)
-            case("m2")
-               call ESMF_TimeIntervalSet(this%frequency,mm=1,__RC__)
-            case("d2")
-               call ESMF_TimeIntervalSet(this%frequency,d=1,__RC__)
-            case("h2")
-               call ESMF_TimeIntervalSet(this%frequency,h=1,__RC__)
-            case("n2")
-               call ESMF_TimeIntervalSet(this%frequency,m=1,__RC__)
-            end select
-         else
-            ! couldn't find any tokens so all the data must be on one file
-            call ESMF_TimeIntervalSet(this%frequency,__RC__)
-         end if
-      end if
-
-      call config%get(file_reff_time,"file_reference_time",default='',rc=status)
-      _VERIFY(status)
-      if (file_reff_time /= '') then
-         this%reff_time = string_to_esmf_time(file_reff_time)
-      else
-         last_token = index(this%file_template,'%',back=.true.)
-         if (last_token.gt.0) then
-            call ESMF_TimeGet(current_time, yy=iyy, mm=imm, dd=idd,h=ihh, m=imn, s=isc  ,__RC__)
-            token = this%file_template(last_token+1:last_token+2)
-            select case(token)
-            case("y4")
-               call ESMF_TimeSet(this%reff_time,yy=iyy,mm=1,dd=1,h=0,m=0,s=0,__RC__)
-            case("m2")
-               call ESMF_TimeSet(this%reff_time,yy=iyy,mm=imm,dd=1,h=0,m=0,s=0,__RC__)
-            case("d2")
-               call ESMF_TimeSet(this%reff_time,yy=iyy,mm=imm,dd=idd,h=0,m=0,s=0,__RC__)
-            case("h2")
-               call ESMF_TimeSet(this%reff_time,yy=iyy,mm=imm,dd=idd,h=ihh,m=0,s=0,__RC__)
-            case("n2")
-               call ESMF_TimeSet(this%reff_time,yy=iyy,mm=imm,dd=idd,h=ihh,m=imn,s=0,__RC__)
-            end select
-         else
-            this%reff_time = current_time 
-         end if
-      end if
-
-      this%valid_range = config%at("valid_range")
+      this%file_template = file_series%file_template
+      this%frequency = file_series%frequency
+      this%reff_time = file_series%reff_time
+      allocate(this%valid_range,source=file_series%valid_range)
       this%collection_id = MAPL_ExtDataAddCollection(this%file_template)
 
    end subroutine initialize

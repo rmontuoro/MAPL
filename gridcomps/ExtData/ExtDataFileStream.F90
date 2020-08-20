@@ -1,19 +1,23 @@
+#include "MAPL_Exceptions.h"
 #include "MAPL_ErrLog.h"
 module MAPL_ExtDataFileStream
+   use ESMF
    use yaFyaml
    use MAPL_KeywordEnforcerMod
    use MAPL_ExceptionHandling
+   use MAPL_TimeStringConversion
+   use MAPL_ExtDataCollectionMod
+   use MAPL_CollectionVectorMod
+   use MAPL_ExtDataCollectionManagerMod
    implicit none
    private
 
    type, public :: ExtDataFileStream
       character(:), allocatable :: file_template
-      character(:), allocatable :: file_reference_date
-      character(:), allocatable :: file_frequency
-      character(:), allocatable :: old_file_freq
+      type(ESMF_TimeInterval) :: frequency
+      type(ESMF_Time) :: reff_time
+      integer :: collection_id
       integer, allocatable :: valid_range(:)
-      contains 
-         procedure :: display
    end type
 
    interface ExtDataFileStream
@@ -22,36 +26,82 @@ module MAPL_ExtDataFileStream
 
 contains
 
-   function new_ExtDataFileStream_from_yaml(config,unusable,rc) result(data_set)
+   function new_ExtDataFileStream_from_yaml(config,current_time,unusable,rc) result(data_set)
       type(Configuration), intent(in) :: config
+      type(ESMF_Time), intent(in) :: current_time
       class(KeywordEnforcer), optional, intent(in) :: unusable
       integer, optional, intent(out) :: rc
 
       type(ExtDataFileStream), target :: data_set
-      logical :: is_present
       integer :: status
+      integer :: last_token
+      integer :: iyy,imm,idd,ihh,imn,isc
+      character(len=2) :: token
+      character(len=:), allocatable :: file_frequency, file_reff_time
+      logical :: is_present
+
       _UNUSED_DUMMY(unusable)
 
-      call config%get(data_Set%file_template,"file_template",default='',is_present=is_present,rc=status)
+      call config%get(data_set%file_template,"file_template",default='',is_present=is_present,rc=status)
       _VERIFY(status)
-      _ASSERT(is_present,"Missing file template in dataset")
-      call config%get(data_Set%file_reference_date,"file_reference_time",default='',rc=status)
+      call config%get(file_frequency,"file_frequency",default='',rc=status)
       _VERIFY(status)
-      call config%get(data_set%file_frequency,"file_frequency",default='',rc=status)
+      if (file_frequency /= '') then
+         data_set%frequency = string_to_esmf_timeinterval(file_frequency)
+      else
+         last_token = index(data_set%file_template,'%',back=.true.)
+         if (last_token.gt.0) then
+            token = data_set%file_template(last_token+1:last_token+2)
+            select case(token)
+            case("y4")
+               call ESMF_TimeIntervalSet(data_set%frequency,yy=1,__RC__)
+            case("m2")
+               call ESMF_TimeIntervalSet(data_set%frequency,mm=1,__RC__)
+            case("d2")
+               call ESMF_TimeIntervalSet(data_set%frequency,d=1,__RC__)
+            case("h2")
+               call ESMF_TimeIntervalSet(data_set%frequency,h=1,__RC__)
+            case("n2")
+               call ESMF_TimeIntervalSet(data_set%frequency,m=1,__RC__)
+            end select
+         else
+            ! couldn't find any tokens so all the data must be on one file
+            call ESMF_TimeIntervalSet(data_set%frequency,__RC__)
+         end if
+      end if
+
+      call config%get(file_reff_time,"file_reference_time",default='',rc=status)
       _VERIFY(status)
+      if (file_reff_time /= '') then
+         data_set%reff_time = string_to_esmf_time(file_reff_time)
+      else
+         last_token = index(data_set%file_template,'%',back=.true.)
+         if (last_token.gt.0) then
+            call ESMF_TimeGet(current_time, yy=iyy, mm=imm, dd=idd,h=ihh, m=imn, s=isc  ,__RC__)
+            token = data_set%file_template(last_token+1:last_token+2)
+            select case(token)
+            case("y4")
+               call ESMF_TimeSet(data_set%reff_time,yy=iyy,mm=1,dd=1,h=0,m=0,s=0,__RC__)
+            case("m2")
+               call ESMF_TimeSet(data_set%reff_time,yy=iyy,mm=imm,dd=1,h=0,m=0,s=0,__RC__)
+            case("d2")
+               call ESMF_TimeSet(data_set%reff_time,yy=iyy,mm=imm,dd=idd,h=0,m=0,s=0,__RC__)
+            case("h2")
+               call ESMF_TimeSet(data_set%reff_time,yy=iyy,mm=imm,dd=idd,h=ihh,m=0,s=0,__RC__)
+            case("n2")
+               call ESMF_TimeSet(data_set%reff_time,yy=iyy,mm=imm,dd=idd,h=ihh,m=imn,s=0,__RC__)
+            end select
+         else
+            data_set%reff_time = current_time
+         end if
+      end if
+
       data_set%valid_range = config%at("valid_range")
-      call config%get(data_Set%old_file_freq,"old_file_freq",default='',rc=status)
-      _VERIFY(status)
+      data_set%collection_id = MAPL_ExtDataAddCollection(data_set%file_template)
+
       _RETURN(_SUCCESS)
 
    end function new_ExtDataFileStream_from_yaml
-
-   subroutine display(this)
-      class(ExtDataFileStream) :: this
-      write(*,*)'dataset_ftempl: ',trim(this%file_template)
-      write(*,*)'dataset_reff: ',trim(this%file_reference_date)
-      write(*,*)'dataset_freq: ',trim(this%file_frequency)
-   end subroutine display
 
 end module MAPL_ExtDataFileStream
 

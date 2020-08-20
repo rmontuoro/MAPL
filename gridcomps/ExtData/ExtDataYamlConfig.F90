@@ -1,5 +1,6 @@
 #include "MAPL_ErrLog.h"
 module MAPL_ExtDataYamlConfig
+   use ESMF
    use yaFyaml
    use MAPL_KeywordEnforcerMod
    use MAPL_ExceptionHandling
@@ -32,8 +33,9 @@ module MAPL_ExtDataYamlConfig
 
 contains
 
-   function new_ExtDataYamlConfig_from_yaml(config_file,unusable,rc) result(ext_config)
+   function new_ExtDataYamlConfig_from_yaml(config_file,current_time,unusable,rc) result(ext_config)
       character(len=*), intent(in) :: config_file
+      type(ESMF_Time), intent(in) :: current_time
       class(KeywordEnforcer), optional, intent(in) :: unusable
       integer, optional, intent(out) :: rc
 
@@ -67,7 +69,7 @@ contains
       do while (iter /= ds_config%end())
          key => iter%key()
          subcfg = iter%value()
-         ds = ExtDataFileStream(subcfg)
+         ds = ExtDataFileStream(subcfg,current_time)
          call ext_config%file_stream_map%insert(trim(key),ds)
          call iter%next()
       enddo

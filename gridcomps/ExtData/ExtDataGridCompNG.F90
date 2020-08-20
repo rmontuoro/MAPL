@@ -350,8 +350,9 @@ CONTAINS
    call MAPL_TimerOn(MAPLSTATE,"TOTAL")
    call MAPL_TimerOn(MAPLSTATE,"Initialize")
 
+   call ESMF_ClockGet(CLOCK, currTIME=time, __RC__)
    new_rc_file = "extdata.yaml"
-   config_yaml = ExtDataOldTypesCreator(new_rc_file,__RC__)
+   config_yaml = ExtDataOldTypesCreator(new_rc_file,time,__RC__)
 ! Get information from export state
 !----------------------------------
     call ESMF_StateGet(EXPORT, ITEMCOUNT=ItemCount, RC=STATUS)
@@ -395,7 +396,6 @@ CONTAINS
 !  Initialize MAPL Generic
 !  -----------------------
    call MAPL_GenericInitialize ( GC, IMPORT, EXPORT, clock,  __RC__ )
-   call ESMF_ClockGet(CLOCK, currTIME=time, __RC__)
 
 
 !                         ---------------------------
@@ -437,7 +437,6 @@ CONTAINS
       if (item_types(i)==Primary_Type) then
          num_primary=num_primary+1
          call config_yaml%fillin_primary(trim(itemnames(i)),self%primary%item(num_primary),time,__RC__)
-         call CreateTimeInterval(self%primary%item(num_primary),clock,__RC__)
       else if (item_types(i)==Derived_type) then
          num_derived=num_derived+1
          call config_yaml%fillin_derived(trim(itemnames(i)),self%derived%item(num_derived),time,__RC__)
@@ -1320,107 +1319,6 @@ CONTAINS
 
      end function timestamp_
     
-     subroutine CreateTimeInterval(item,clock,rc)
-        type(PrimaryExport)      , intent(inout) :: item
-        type(ESMF_Clock)          , intent(in   ) :: clock
-        integer, optional         , intent(out  ) :: rc
-
-        integer                    :: iyy,imm,idd,ihh,imn,isc
-        integer                    :: lasttoken
-        character(len=2)           :: token
-        type(ESMF_Time)            :: time,start_time
-        integer                    :: cindex,pindex
-        character(len=ESMF_MAXSTR) :: creffTime, ctInt
-       
-        integer :: status
- 
-        creffTime = ''
-        ctInt     = ''
-        call ESMF_ClockGet (CLOCK, currTIME=time, startTime=start_time, __RC__)
-        if (.not.item%hasFileReffTime) then
-           ! if int_frequency is less than zero than try to guess it from the file template
-           ! if that fails then it must be a single file or a climatology 
-
-           call ESMF_TimeGet(time, yy=iyy, mm=imm, dd=idd,h=ihh, m=imn, s=isc  ,__RC__)
-           !=======================================================================
-           ! Using "now" as a reference time makes it difficult to find a file if
-           ! we need to extrapolate, and doesn't make an awful lot of sense anyway.
-           ! Instead, use the start of (current year - 20) or 1985, whichever is
-           ! earlier (SDE 2016-12-30)
-           iyy = Min(iyy-20,1985)
-           imm = 1
-           idd = 1
-           ihh = 0
-           imn = 0
-           isc = 0
-           !=======================================================================
-           lasttoken = index(item%file,'%',back=.true.)
-           if (lasttoken.gt.0) then
-              token = item%file(lasttoken+1:lasttoken+2)
-              select case(token)
-              case("y4")
-                 call ESMF_TimeSet(item%reff_time,yy=iyy,mm=1,dd=1,h=0,m=0,s=0,__RC__)
-                 call ESMF_TimeIntervalSet(item%frequency,startTime=start_time,yy=1,__RC__)
-              case("m2")
-                 call ESMF_TimeSet(item%reff_time,yy=iyy,mm=imm,dd=1,h=0,m=0,s=0,__RC__)
-                 call ESMF_TimeIntervalSet(item%frequency,startTime=start_time,mm=1,__RC__)
-              case("d2")
-                 call ESMF_TimeSet(item%reff_time,yy=iyy,mm=imm,dd=idd,h=0,m=0,s=0,__RC__)
-                 call ESMF_TimeIntervalSet(item%frequency,startTime=start_time,d=1,__RC__)
-              case("h2")
-                 call ESMF_TimeSet(item%reff_time,yy=iyy,mm=imm,dd=idd,h=ihh,m=0,s=0,__RC__)
-                 call ESMF_TimeIntervalSet(item%frequency,startTime=start_time,h=1,__RC__)
-              case("n2")
-                 call ESMF_TimeSet(item%reff_time,yy=iyy,mm=imm,dd=idd,h=ihh,m=imn,s=0,__RC__)
-                 call ESMF_TimeIntervalSet(item%frequency,startTime=start_time,m=1,__RC__)
-              end select
-           else
-              ! couldn't find any tokens so all the data must be on one file
-              call ESMF_TimeIntervalSet(item%frequency,__RC__)
-           end if
-        else
-           ! Reference time should look like:
-           ! YYYY-MM-DDThh:mm:ssPYYYY-MM-DDThh:mm:ss
-           ! The date before the P is the reference time, from which future times
-           ! will be taken. The date after the P is the frequency with which the
-           ! file changes. For example, if the data is referenced to 1985 and
-           ! there is 1 file per year, the reference time should be
-           ! 1985-01-01T00:00:00P0001-00-00T00:00:00
-           ! Get refference time, if not provided use current model date
-           pindex=index(item%FileReffTime,'P')
-           if (pindex==0) then 
-              _ASSERT(.false., 'ERROR: File template ' // item%file // ' has invalid reference date format')
-           end if
-           cReffTime = item%FileReffTime(1:pindex-1) 
-           if (trim(cReffTime) == '') then
-              item%reff_time = Time
-           else
-              call MAPL_NCIOParseTimeUnits(cReffTime,iyy,imm,idd,ihh,imn,isc,status)
-              _VERIFY(STATUS)
-              call ESMF_TimeSet(item%reff_time,yy=iyy,mm=imm,dd=idd,h=ihh,m=imn,s=isc,rc=status)
-              _VERIFY(STATUS)
-           end if
-           ! now get time interval. Put 0000-00-00 in front if not there so parsetimeunits doesn't complain
-           ctInt = item%FileReffTime(pindex+1:)
-           cindex = index(ctInt,'T')
-           if (cindex == 0) ctInt = '0000-00-00T'//trim(ctInt)
-           call MAPL_NCIOParseTimeUnits(ctInt,iyy,imm,idd,ihh,imn,isc,status)
-           _VERIFY(STATUS)
-           call ESMF_TimeIntervalSet(item%frequency,yy=iyy,mm=imm,d=idd,h=ihh,m=imn,s=isc,rc=status)
-           _VERIFY(STATUS) 
-        end if
-
-        If (Mapl_Am_I_Root().and.(Ext_Debug > 0)) Then
-           Write(*,'(5(a))') ' >> REFFTIME for ',trim(item%file),': ',trim(item%FileReffTime)
-           call ESMF_TimeGet(item%reff_time,yy=iyy,mm=imm,dd=idd,h=ihh,m=imn,s=isc,rc=status)
-           Write(*,'(a,I0.4,5(a,I0.2))') ' >> Reference time: ',iYy,'-',iMm,'-',iDd,' ',iHh,':',iMn,':',iSc
-           call ESMF_TimeIntervalGet(item%frequency,yy=iyy,mm=imm,d=idd,h=ihh,m=imn,s=isc,rc=status)
-           Write(*,'(a,I0.4,5(a,I0.2))') ' >> Frequency     : ',iYy,'-',iMm,'-',iDd,' ',iHh,':',iMn,':',iSc
-        End If
-        _RETURN(ESMF_SUCCESS) 
-
-     end subroutine CreateTimeInterval
-
      subroutine GetClimYear(item, rc)
 
         type(PrimaryExport)      , intent(inout) :: item

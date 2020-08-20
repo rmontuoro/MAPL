@@ -34,8 +34,9 @@ module MAPL_ExtDataOldTypesCreator
 
    contains
 
-   function new_ExtDataOldTypesCreator(config_file,unusable,rc ) result(ExtDataObj)
+   function new_ExtDataOldTypesCreator(config_file,current_time,unusable,rc ) result(ExtDataObj)
       character(len=*), intent(in) :: config_file
+      type(ESMF_Time), intent(in) :: current_time
       class(KeywordEnforcer), optional, intent(in) :: unusable
       integer, optional, intent(out) :: rc
 
@@ -44,7 +45,7 @@ module MAPL_ExtDataOldTypesCreator
       integer :: status
 
       _UNUSED_DUMMY(unusable)
-      ExtDataObj%ExtDataYamlConfig = ExtDataYamlConfig(config_file,rc=status)
+      ExtDataObj%ExtDataYamlConfig = ExtDataYamlConfig(config_file,current_time,rc=status)
       _VERIFY(status)
 
       _RETURN(_SUCCESS)
@@ -61,9 +62,6 @@ module MAPL_ExtDataOldTypesCreator
 
       type(ExtDataRule), pointer :: rule
       type(ExtDataFileStream),  pointer :: dataset
-      type(Parser)              :: p
-      type(FileStream) :: fstream
-      type(Configuration) :: config, ds_config,my_config
       type(ExtDataSimpleFileHandler) :: simple_handler
       integer :: status, semi_pos
       logical :: disable_interpolation
@@ -130,15 +128,10 @@ module MAPL_ExtDataOldTypesCreator
       primary_item%isConst = .false.
       dataset => this%file_stream_map%at(trim(rule%file_template_key))
 
-      p = Parser('core')
-      fstream=FileStream(this%config_file)
-      config = p%load(fstream)
-      ds_config = config%at("data_sets")
-      my_config = ds_config%at(trim(rule%file_template_key))
       if (primary_item%cycling) then
          _ASSERT(.false.,'not yet implemented')
       else
-         call simple_handler%initialize(my_config,time,__RC__)
+         call simple_handler%initialize(dataset,__RC__)
          allocate(primary_item%filestream,source=simple_handler)
       end if
 
@@ -152,15 +145,10 @@ module MAPL_ExtDataOldTypesCreator
             primary_item%const=0.0
          end if
       end if
-      if (dataset%old_file_freq /= '') then
-         primary_item%fileReffTime = dataset%old_file_freq
-         primary_item%hasFileReffTime = .true.
-      else
-         primary_item%hasFileReffTime = .false.
-      end if 
-      if (dataset%file_frequency /= '' .or. dataset%file_reference_date /= '') then
-         _ASSERT(.false.,'Not yet support')
-      end if
+
+      !legacy
+      primary_item%frequency=dataset%frequency
+      primary_item%reff_time=dataset%reff_time
 
       ! newgstuff
       primary_item%cycling=rule%allow_cycling

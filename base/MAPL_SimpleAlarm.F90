@@ -110,7 +110,7 @@ contains
 
       call ESMF_TimeValidate(this%stop_time,rc=status)
       if (status == _SUCCESS) then
-         if (current_time > this%stop_time) then
+         if (current_time >= this%stop_time) then
             _RETURN(_SUCCESS)
          end if
       end if
@@ -123,7 +123,7 @@ contains
          temp_time = this%last_ring
          do while (current_time > temp_time)
             temp_time = temp_time + this%ring_interval
-            if (temp_Time >= current_time) then
+            if (temp_Time == current_time) then
                this%last_ring = temp_time
                ringing=.true.
                exit
@@ -133,7 +133,7 @@ contains
          temp_time = this%last_ring
          do while (current_time < temp_time)
             temp_time = temp_time - this%ring_interval
-            if (temp_Time <= current_time) then
+            if (temp_Time == current_time) then
                this%last_ring = temp_time
                ringing=.true.
                exit

@@ -16,8 +16,8 @@ module MAPL_SimpleAlarm
       type(ESMF_TimeInterval) :: ring_interval
       type(ESMF_Time) :: last_ring
       type(ESMF_Time) :: stop_time
+      type(ESMF_Time), allocatable :: ring_times(:)
       logical :: sticky
-      logical :: forever_alarm
       logical :: still_ringing
       contains
          procedure :: is_ringing
@@ -30,23 +30,31 @@ module MAPL_SimpleAlarm
 
 contains
 
-   function new_simple_alarm(reference_time,ring_interval,stop_time,sticky,rc) result(new_alarm)
-      type(ESMF_Time), intent(in) :: reference_time
-      type(ESMF_TimeInterval), intent(in) :: ring_interval
+   function new_simple_alarm(ring_times,reference_time,ring_interval,stop_time,sticky,rc) result(new_alarm)
+      type(ESMF_Time), intent(in), optional :: ring_times(:)
+      type(ESMF_Time), intent(in), optional :: reference_time
+      type(ESMF_TimeInterval), intent(in), optional :: ring_interval
       type(ESMF_Time), intent(in), optional :: stop_time
       logical, intent(in), optional :: sticky
       integer, optional, intent(out) :: rc
 
       type(SimpleAlarm) :: new_alarm
 
-      new_alarm%reference_time = reference_time
-      new_alarm%ring_interval = ring_interval
-      new_alarm%last_ring = reference_time
+      if (present(reference_time)) then
+         new_alarm%reference_time = reference_time
+         new_alarm%last_ring = reference_time
+         _ASSERT(present(ring_interval),'ring interval must be present with reff time')
+      end if
+      if (present(ring_interval)) then
+         new_alarm%ring_interval = ring_interval
+         _ASSERT(present(reference_time),'ref time must be present with ring interval')
+      end if
+      if (present(ring_times)) then
+         new_alarm%ring_times=ring_times
+         _ASSERT((.not.present(ring_interval)) .and. (.not.present(reference_time)),'message here')
+      end if
       if (present(stop_time)) then
           new_alarm%stop_time = stop_time
-          new_alarm%forever_alarm = .false.
-      else
-          new_alarm%forever_alarm = .true.
       end if
       if (present(sticky)) then
          new_alarm%sticky=sticky
@@ -69,10 +77,8 @@ contains
       type(ESMF_Time), intent(inout) :: current_time
       integer, optional, intent(out) :: rc
 
-      integer :: status
+      integer :: status,i
       logical :: ringing
-      integer(ESMF_KIND_I8) :: ring_interval_i8, elapsed_interval_i8
-      type(ESMF_TimeInterval) :: elapsed_interval
 
       type(ESMF_Time) :: temp_time
 
@@ -84,6 +90,19 @@ contains
 
       ringing = .false.
 
+      ! first check if have ring times
+      if (allocated(this%ring_times)) then
+         do i=1,size(this%ring_times)
+            if (this%ring_times(i) == current_time) then
+               ringing=.true.
+               exit
+            end if
+         enddo
+         if (this%sticky .and. ringing) this%still_ringing=.true.
+         _RETURN(_SUCCESS)
+      end if
+      
+      ! do not have ring times, must be reff time + interval
       ! if outside time range don't ring
       if (current_time < this%reference_time) then
          _RETURN(_SUCCESS)

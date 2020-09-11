@@ -4264,11 +4264,11 @@ CONTAINS
         call ESMF_TimeIntervalSet(tInterval,yy=iyy,mm=imm,d=idd,h=ihh,m=imn,s=isc,rc=status)
         _VERIFY(STATUS) 
         if (present(primaryItem)) then
-           primaryItem%update_alarm = simpleAlarm(current_time,tInterval,rc=status)
+           primaryItem%update_alarm = simpleAlarm(reference_time=current_time,ring_interval=tInterval,rc=status)
            _VERIFY(status)
            primaryItem%alarmIsEnabled = .true.
         else if (present(derivedItem)) then
-           DerivedItem%update_alarm = simpleAlarm(current_time,tInterval,rc=status)
+           DerivedItem%update_alarm = simpleAlarm(reference_time=current_time,ring_interval=tInterval,rc=status)
            _VERIFY(status)
            derivedItem%alarmIsEnabled = .true.
         end if

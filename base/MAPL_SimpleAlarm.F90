@@ -72,15 +72,15 @@ contains
       end if
    end subroutine turn_off
     
-   function is_ringing(this,current_time,rc) result(ringing)
+   function is_ringing(this,clock,rc) result(ringing)
       class(SimpleAlarm), intent(inout) :: this
-      type(ESMF_Time), intent(inout) :: current_time
+      type(ESMF_Clock), intent(inout) :: clock
       integer, optional, intent(out) :: rc
 
       integer :: status,i
       logical :: ringing
 
-      type(ESMF_Time) :: temp_time
+      type(ESMF_Time) :: temp_time, current_time
 
       ! sticky wins
       if (this%sticky .and. this%still_ringing) then
@@ -88,15 +88,15 @@ contains
          _RETURN(_SUCCESS)
       endif
 
+      call ESMF_ClockGet(clock,currTime=current_time,rc=status)
+      _VERIFY(status)
       ringing = .false.
 
       ! first check if have ring times
       if (allocated(this%ring_times)) then
          do i=1,size(this%ring_times)
-            if (this%ring_times(i) == current_time) then
-               ringing=.true.
-               exit
-            end if
+            ringing=in_interval(this%ring_times(i),clock,rc=status)
+            if (ringing) exit
          enddo
          if (this%sticky .and. ringing) this%still_ringing=.true.
          _RETURN(_SUCCESS)
@@ -123,9 +123,10 @@ contains
          temp_time = this%last_ring
          do while (current_time > temp_time)
             temp_time = temp_time + this%ring_interval
-            if (temp_Time == current_time) then
+            ringing = in_interval(temp_time,clock,rc=status)
+            _VERIFY(status)
+            if (ringing) then
                this%last_ring = temp_time
-               ringing=.true.
                exit
             end if
          enddo
@@ -133,9 +134,10 @@ contains
          temp_time = this%last_ring
          do while (current_time < temp_time)
             temp_time = temp_time - this%ring_interval
-            if (temp_Time == current_time) then
+            ringing = in_interval(temp_time,clock,rc=status)
+            _VERIFY(status)
+            if (ringing) then
                this%last_ring = temp_time
-               ringing=.true.
                exit
             end if
          enddo
@@ -146,5 +148,32 @@ contains
 
       _RETURN(_SUCCESS)
    end function is_ringing
+
+   function in_interval(time,clock,rc) result(in_range)
+      type(ESMF_Time), intent(in) :: time
+      type(ESMF_Clock), intent(in) :: clock
+      integer, intent(out), optional :: rc
+
+      type(ESMF_Time) :: current_time, previous_time
+      type(ESMF_TimeInterval) :: dt
+      logical :: in_range
+      type(ESMF_DIRECTION_FLAG) :: direction
+      integer :: status
+
+      in_range = .false.
+      call ESMF_ClockGet(clock,currTime=current_time,direction=direction, &
+            timeStep=dt,rc=status)
+      _VERIFY(status)
+      if (direction==ESMF_DIRECTION_FORWARD) then
+         previous_time=current_time-dt
+         if (time > previous_time .and. time  <= current_time) in_range = .true.
+      else if (direction==ESMF_DIRECTION_REVERSE) then
+         previous_time=current_time+dt
+         if (time < previous_time .and. time >= current_time) in_range = .true.
+      end if
+
+      _RETURN(_SUCCESS)
+
+   end function in_interval
 
 end module MAPL_SimpleAlarm

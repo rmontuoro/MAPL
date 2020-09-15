@@ -1387,7 +1387,7 @@ CONTAINS
 
       call MAPL_TimerOn(MAPLSTATE,"--CheckUpd")
 
-      call CheckUpdate(doUpdate_,time,time0,hasRun,primaryItem=item,__RC__)
+      call CheckUpdate(doUpdate_,time,clock,hasRun,primaryItem=item,__RC__)
       doUpdate(i) = doUpdate_
       call MAPL_TimerOff(MAPLSTATE,"--CheckUpd")
 
@@ -1670,7 +1670,7 @@ CONTAINS
 
       derivedItem => self%derived%item(i)
 
-      call CheckUpdate(doUpdate_,time,time0,hasRun,derivedItem=deriveditem,__RC__)
+      call CheckUpdate(doUpdate_,time,clock,hasRun,derivedItem=deriveditem,__RC__)
 
       if (doUpdate_) then
 
@@ -4159,10 +4159,10 @@ CONTAINS
 
   end subroutine advanceAndCount
 
-  subroutine CheckUpdate(doUpdate,updateTime,currTime,hasRun,primaryItem,derivedItem,rc) 
+  subroutine CheckUpdate(doUpdate,updateTime,clock,hasRun,primaryItem,derivedItem,rc) 
      logical,                       intent(out  ) :: doUpdate
      type(ESMF_Time),               intent(inout) :: updateTime
-     type(ESMF_Time),               intent(inout) :: currTime
+     type(ESMF_Clock),               intent(inout) :: clock
      logical        ,               intent(in   ) :: hasRun
      type(PrimaryExport), optional, intent(inout) :: primaryItem
      type(DerivedExport), optional, intent(inout) :: derivedItem
@@ -4170,15 +4170,16 @@ CONTAINS
 
      character(len=ESMF_MAXSTR) :: Iam
      integer                    :: status
-     type(ESMF_Time)            :: time,time0,refresh_time
+     type(ESMF_Time)            :: time,time0,refresh_time,currTime
      Iam = "CheckUpdate"
 
+     call ESMF_ClockGet(clock,currTime=currtime,__RC__)
      time0 = currTime
      time  = currTime
      if (present(primaryItem)) then
        
         if (primaryItem%AlarmIsEnabled) then
-           doUpdate = primaryItem%update_alarm%is_ringing(currTime,__RC__)
+           doUpdate = primaryItem%update_alarm%is_ringing(clock,__RC__)
            if (hasRun .eqv. .false.) doUpdate = .true.
            updateTime = currTime
         else if (trim(primaryItem%cyclic) == 'single') then
@@ -4205,7 +4206,7 @@ CONTAINS
         end if
      else if (present(derivedItem)) then
         if (DerivedItem%AlarmIsEnabled) then
-           doUpdate = derivedItem%update_alarm%is_ringing(currTime,__RC__)
+           doUpdate = derivedItem%update_alarm%is_ringing(clock,__RC__)
            updateTime = currTime
         else
            if (derivedItem%refresh_template == "0") then

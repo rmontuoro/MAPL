@@ -11,6 +11,8 @@ module MAPL_ExtDataBracket
    type, public :: ExtDataBracket
       type(ESMF_Field) :: left_field,right_field
       type(ESMF_Time)  :: left_time,right_time
+      character(len=ESMF_MAXPATHLEN) :: left_file, right_file
+      integer :: left_index, right_index
       real             :: scale_factor = 0.0
       real             :: offset = 0.0
       logical          :: disable_interpolation = .false.

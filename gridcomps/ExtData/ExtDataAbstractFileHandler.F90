@@ -31,11 +31,11 @@ module MAPL_ExtdataAbstractFileHandler
    end type
 
    abstract interface
-      subroutine get_file_bracket(this,target_time, bracketside, source_time, output_file, time_index, output_time, rc)
+      subroutine get_file_bracket(this,input_time, bracketside, source_time, output_file, time_index, output_time, rc)
          use ESMF
          import ExtDataAbstractFileHandler
          class(ExtDataAbstractFileHandler), intent(inout)  :: this
-         type(ESMF_Time), intent(in) :: target_time
+         type(ESMF_Time), intent(inout) :: input_time
          character(len=*), intent(in) :: bracketside
          integer, intent(in) :: source_time(:)
          character(len=*), intent(inout) :: output_file
@@ -67,20 +67,27 @@ contains
 
    end subroutine initialize
 
-   subroutine get_time_on_file(this,filename,target_time,bracketside,time_index,output_time,rc)
+   subroutine get_time_on_file(this,filename,target_time,bracketside,time_index,output_time,wrap,rc)
       class(ExtdataAbstractFileHandler), intent(inout) :: this
       character(len=*), intent(inout) :: filename
       type(ESMF_Time), intent(in) :: target_time
       character(len=*), intent(in) :: bracketside
       integer, intent(Out) :: time_index
       type(ESMF_Time), intent(out) :: output_time
+      integer, optional, intent(inout) :: wrap
       integer, optional, intent(out) :: rc
       integer :: status
 
       type(FileMetadataUtils), pointer :: file_metadata
       type(ESMF_Time), allocatable :: time_series(:)
-      logical :: in_bounds, found_time
+      logical :: in_bounds, found_time, wrap_
       integer :: i,num_times
+    
+      if (present(wrap)) then
+         wrap_= .true.
+      else
+         wrap_=.false.
+      end if
 
       call this%make_metadata(filename,file_metadata,__RC__) 
       call file_metadata%get_time_info(timeVector=time_series,__RC__)
@@ -97,9 +104,16 @@ contains
                   exit
                end if
             enddo
-         end if
+         else 
+            if (wrap_) then
+               output_time=time_series(num_times)
+               time_index = num_times
+               found_time = .true.
+               wrap = -1   
+            end if
+         end if         
       else if (bracketside == 'R') then
-         in_bounds = .not.(target_time >= time_series(num_times))  
+         in_bounds = .not.(target_time >= time_series(num_times))
          if (in_bounds) then
             do i=1,num_times
                if (target_time < time_series(i)) then
@@ -109,12 +123,20 @@ contains
                   exit
                end if
             enddo
+         else 
+            if (wrap_) then
+               output_time=time_series(1)
+               time_index = 1
+               found_time = .true.
+               wrap = 1   
+            end if
          end if
       else
          _ASSERT(.false.,"unknown bracket side")
       end if
 
-      if (found_time .and. in_bounds) then
+      !if (found_time .and. in_bounds) then
+      if (found_time) then
          _RETURN(_SUCCESS)
       else
          _RETURN(_FAILURE)

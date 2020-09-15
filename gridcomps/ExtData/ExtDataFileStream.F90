@@ -97,6 +97,9 @@ contains
       end if
 
       data_set%valid_range = config%at("valid_range")
+      if (size(data_set%valid_range) > 0) then
+         _ASSERT(size(data_set%valid_range)==2,'valid_range must be 2 integers')
+      end if
       data_set%collection_id = MAPL_ExtDataAddCollection(data_set%file_template)
 
       _RETURN(_SUCCESS)

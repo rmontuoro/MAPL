@@ -25,9 +25,9 @@ module MAPL_ExtdataSimpleFileHandler
 
 contains
 
-   subroutine get_file_bracket(this, target_time, bracketside, source_time, output_file, time_index, output_time, rc)
+   subroutine get_file_bracket(this, input_time, bracketside, source_time, output_file, time_index, output_time, rc)
       class(ExtdataSimpleFileHandler), intent(inout) :: this
-      type(ESMF_Time), intent(in) :: target_time
+      type(ESMF_Time), intent(inout) :: input_time
       character(len=*), intent(in) :: bracketside
       integer, intent(in) :: source_time(:)
       character(len=*), intent(inout) :: output_file
@@ -40,18 +40,18 @@ contains
       call ESMF_TimeIntervalSet(zero,__RC__)      
       if (this%frequency == zero) then
          output_file = this%file_template
-         call this%get_time_on_file(output_file,target_time,bracketside,time_index,output_time,__RC__)
+         call this%get_time_on_file(output_file,input_time,bracketside,time_index,output_time,__RC__)
          output_file = output_file
       else
-         call this%get_file(output_file,target_time,0,__RC__)
-         call this%get_time_on_file(output_file,target_time,bracketside,time_index,output_time,__RC__)
+         call this%get_file(output_file,input_time,0,__RC__)
+         call this%get_time_on_file(output_file,input_time,bracketside,time_index,output_time,rc=status)
          if (status /=  _SUCCESS) then
             if ( bracketside == 'R') then
-               call this%get_file(output_file,target_time,1,__RC__)
-               call this%get_time_on_file(output_file,target_time,bracketside,time_index,output_time,__RC__)
+               call this%get_file(output_file,input_time,1,__RC__)
+               call this%get_time_on_file(output_file,input_time,bracketside,time_index,output_time,__RC__)
             else if (bracketside == 'L') then 
-               call this%get_file(output_file,target_time,-1,__RC__)
-               call this%get_time_on_file(output_file,target_time,bracketside,time_index,output_time,__RC__)
+               call this%get_file(output_file,input_time,-1,__RC__)
+               call this%get_time_on_file(output_file,input_time,bracketside,time_index,output_time,__RC__)
             end if
          end if
       end if
@@ -69,9 +69,21 @@ contains
       type(ESMF_Time) :: ftime
       integer :: n,status
       logical :: file_found
+      integer(ESMF_KIND_I8) :: interval_seconds
 
-      n = (target_time-this%reff_time)/this%frequency
-      ftime = this%reff_time+(n+shift)*this%frequency
+      call ESMF_TimeIntervalGet(this%frequency,s_i8=interval_seconds)
+      if (interval_seconds==0) then
+         ! time is not representable as absolute time interval (month, year etc...) do this
+         ! brute force way. Not good but ESMF leaves no choice
+         ftime=this%reff_time
+         do while (ftime < target_time)
+            ftime = ftime + this%frequency
+         enddo
+         ftime=ftime -this%frequency + shift*this%frequency
+      else
+         n = (target_time-this%reff_time)/this%frequency 
+         ftime = this%reff_time+(n+shift)*this%frequency
+      end if
       call fill_grads_template(filename,this%file_template,time=ftime,__RC__)
       inquire(file=trim(filename),exist=file_found)
       _ASSERT(file_found,"get_file did not file a file using: "//trim(this%file_template))

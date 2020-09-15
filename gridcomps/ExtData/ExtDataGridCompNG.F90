@@ -886,6 +886,9 @@ CONTAINS
                Write(*,*) '      ExtData Run_: NOT_SINGLE: Start. Update bracketing times?'
             ENDIF
 
+            call ESMF_TimePrint(time,options='string')
+            call ESMF_TimePrint(item%interp_time1,options='string')
+            call ESMF_TimePrint(item%interp_time2,options='string')
             if (time >= item%interp_time2) then
                ! normal flow assume clock is moving forward
                updateR = .true.
@@ -901,6 +904,7 @@ CONTAINS
                updateL = .false.
                swap    = .false.
             end if
+            write(*,*)'bmaa update: ',updateL,updateR,swap
 
             IF ( (Ext_Debug > 0) .AND. MAPL_Am_I_Root() ) THEN
                Write(*,*) '         ==> updateR: ', updateR

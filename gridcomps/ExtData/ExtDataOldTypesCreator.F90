@@ -18,6 +18,7 @@ module MAPL_ExtDataOldTypesCreator
    use MAPL_RegridderSpecMod
    use MAPL_ExtDataAbstractFileHandler
    use MAPL_ExtDataSimpleFileHandler
+   use MAPL_ExtDataClimFileHandler
    implicit none
    public :: ExtDataOldTypesCreator
 
@@ -63,6 +64,7 @@ module MAPL_ExtDataOldTypesCreator
       type(ExtDataRule), pointer :: rule
       type(ExtDataFileStream),  pointer :: dataset
       type(ExtDataSimpleFileHandler) :: simple_handler
+      type(ExtDataClimFileHandler) :: clim_handler
       integer :: status, semi_pos
       logical :: disable_interpolation
 
@@ -91,7 +93,7 @@ module MAPL_ExtDataOldTypesCreator
       ! units
       primary_item%units = ''
       ! climatology
-      primary_item%cyclic = ESMF_UtilStringLowerCase(trim(rule%climatology))
+      primary_item%cyclic = 'n' !ESMF_UtilStringLowerCase(trim(rule%climatology))
       ! regrid method
       if (trim(rule%regrid_method) == "REGRID_METHOD_BILINEAR") then
          primary_item%trans = REGRID_METHOD_BILINEAR
@@ -106,6 +108,13 @@ module MAPL_ExtDataOldTypesCreator
       else 
          _ASSERT(.false.,"Invalid regridding method")
       end if
+
+      ! newgstuff
+      primary_item%cycling=rule%cycling
+      primary_item%climyear=rule%clim_year
+      primary_item%allow_extrap=rule%allow_extrap
+      allocate(primary_item%source_time,source=rule%source_time)
+
       ! new refresh
       call primary_item%update_freq%create_from_parameters(rule%refresh_time, &
            rule%refresh_frequency, rule%refresh_offset, time, __RC__)
@@ -128,8 +137,9 @@ module MAPL_ExtDataOldTypesCreator
       primary_item%isConst = .false.
       dataset => this%file_stream_map%at(trim(rule%file_template_key))
 
-      if (primary_item%cycling) then
-         _ASSERT(.false.,'not yet implemented')
+      if (primary_item%cycling .or. primary_item%allow_extrap) then
+         call clim_handler%initialize(dataset,__RC__)
+         allocate(primary_item%filestream,source=clim_handler)
       else
          call simple_handler%initialize(dataset,__RC__)
          allocate(primary_item%filestream,source=simple_handler)
@@ -149,10 +159,6 @@ module MAPL_ExtDataOldTypesCreator
       !legacy
       primary_item%frequency=dataset%frequency
       primary_item%reff_time=dataset%reff_time
-
-      ! newgstuff
-      primary_item%cycling=rule%allow_cycling
-      allocate(primary_item%source_time,source=rule%source_time)
 
       _RETURN(_SUCCESS)
 

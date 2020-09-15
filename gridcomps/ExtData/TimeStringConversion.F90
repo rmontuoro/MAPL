@@ -99,8 +99,7 @@ contains
       lastdash  = index(time_string, '-', BACK=.TRUE.)
 
       if (firstdash .LE. 0 .OR. lastdash .LE. 0) then
-        rc = -1
-        return
+        _RETURN(_FAILURE)
       endif
 
       ypos(2) = firstdash - 1
@@ -136,11 +135,11 @@ contains
 
       tpos = index(input_string,'T')
       _ASSERT(tpos >0,"Invalid date/time format, missing date/time separator")
-     
+    
       date_string = input_string(:tpos-1)
       time_string = input_string(tpos+1:)
       int_time = string_to_integer_time(time_string,__RC__)
-      int_date = string_to_integer_date(time_string,__RC__)
+      int_date = string_to_integer_date(date_string,__RC__)
 
       year=int_date/10000
       month=mod(int_date/100,100)

@@ -109,7 +109,7 @@ module MAPL_ExtDataOldTypesCreator
          _ASSERT(.false.,"Invalid regridding method")
       end if
 
-      ! newgstuff
+      ! newstuff
       primary_item%cycling=rule%cycling
       primary_item%climyear=rule%clim_year
       primary_item%allow_extrap=rule%allow_extrap
@@ -118,15 +118,8 @@ module MAPL_ExtDataOldTypesCreator
       ! new refresh
       call primary_item%update_freq%create_from_parameters(rule%refresh_time, &
            rule%refresh_frequency, rule%refresh_offset, time, __RC__)
+
       disable_interpolation =  .not.rule%time_interpolation 
-      ! refresh_template
-      !if (rule%refresh_template(1:1)=='F') then
-         !disable_interpolation = .true.
-         !primary_item%refresh_template=rule%refresh_template(2:)
-      !else
-         !disable_interpolation = .false.
-         !primary_item%refresh_template=rule%refresh_template
-      !end if
 
       call primary_item%modelGridFields%comp1%set_parameters(offset=rule%shift,scale_factor=rule%scaling,disable_interpolation=disable_interpolation)
       call primary_item%modelGridFields%comp2%set_parameters(offset=rule%shift,scale_factor=rule%scaling,disable_interpolation=disable_interpolation)

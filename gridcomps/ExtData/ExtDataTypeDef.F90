@@ -41,7 +41,6 @@ module MAPL_ExtDataTypeDef
      type(ESMF_Time)              :: time1, time2
      type(ESMF_Time)              :: interp_time1, interp_time2
      integer                      :: tindex1,tindex2
-     integer                      :: climyear
      logical                      :: allow_extrap
      type(ESMF_TimeInterval)      :: frequency
      type(ESMF_Time)              :: reff_time

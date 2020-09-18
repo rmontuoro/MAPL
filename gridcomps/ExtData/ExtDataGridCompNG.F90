@@ -1365,10 +1365,7 @@ CONTAINS
         else
            ftime = time
 
-           !call ESMF_TimeGet(fTime,yy=iyr,mm=imm,dd=idd,h=ihr,m=imn,s=iss,__RC__)
-           !if (item%cyclic == 'y') then
            if (item%cycling) then
-              !iyr = item%climyear
               ftime=item%reff_time
            end if
            call ESMF_TimeGet(fTime,yy=iyr,mm=imm,dd=idd,h=ihr,m=imn,s=iss,__RC__)

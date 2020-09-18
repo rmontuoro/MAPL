@@ -112,7 +112,6 @@ module MAPL_ExtDataOldTypesCreator
 
       ! newstuff
       primary_item%cycling=rule%cycling
-      primary_item%climyear=rule%clim_year
       primary_item%allow_extrap=rule%allow_extrap
       allocate(primary_item%source_time,source=rule%source_time)
 
@@ -130,25 +129,23 @@ module MAPL_ExtDataOldTypesCreator
       ! file_template
       primary_item%isConst = .false.
       dataset => this%file_stream_map%at(trim(rule%file_template_key))
-
-      if (primary_item%cycling) then
-         call clim_handler%initialize(dataset,__RC__)
-         allocate(primary_item%filestream,source=clim_handler)
-      else
-         call simple_handler%initialize(dataset,__RC__)
-         allocate(primary_item%filestream,source=simple_handler)
-      end if
-
-      write(*,*)'bmaa dataset: ',trim(dataset%file_template)
       primary_item%file = dataset%file_template
-      write(*,*)'bmaa file: ',trim(primary_item%file)
-      if (primary_item%file(1:9) == '/dev/null') then
+
+      if (index(primary_item%file,'/dev/null') /= 0) then
          primary_item%isConst = .true.
          semi_pos = index(primary_item%file,':')
-         if (semi_pos > 9) then
+         if (semi_pos > 0) then
             read(primary_item%file(semi_pos+1:),*)primary_item%const
          else
             primary_item%const=0.0
+         end if
+      else
+         if (primary_item%cycling) then
+            call clim_handler%initialize(dataset,__RC__)
+            allocate(primary_item%filestream,source=clim_handler)
+         else
+            call simple_handler%initialize(dataset,__RC__)
+            allocate(primary_item%filestream,source=simple_handler)
          end if
       end if
 

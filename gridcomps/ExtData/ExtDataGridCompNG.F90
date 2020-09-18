@@ -468,16 +468,6 @@ CONTAINS
 
       item%pfioCollection_id = MAPL_ExtDataAddCollection(item%file)
 
-      if (item%vartype == MAPL_BundleItem) then
-
-         call ESMF_StateGet(self%ExtDataState, trim(item%name), bundle,__RC__)
-         ! let us check that bundle is empty
-         call ESMF_FieldBundleGet(bundle, fieldcount = fieldcount , __RC__)
-         _ASSERT(fieldcount == 0,'Bundle must be empty')
-         call MAPL_CFIORead(item%file,time,bundle,noread=.true.,ignorecase=self%ignorecase, only_vars=item%var,__RC__)
-
-      end if
-
 !  Read the single step files (read interval equal to zero)
 !  --------------------------------------------------------
 
@@ -493,8 +483,6 @@ CONTAINS
                   call MAPL_GetPointer(self%ExtDataState, ptr3d, trim(item%name), __RC__)
                   ptr3d = item%const
             endif
-         else if (item%vartype == MAPL_BundleItem) then
-            _ASSERT(.false.,'Cannot assign constant to field bundle')
          else if (item%vartype == MAPL_VectorField) then
             call ESMF_StateGet(self%ExtDataState,trim(item%vcomp1),field,__RC__)
             call ESMF_FieldGet(field,dimCount=fieldRank,__RC__)
@@ -562,18 +550,6 @@ CONTAINS
             call createFileLevBracket(item,cf_master,__RC__)
          end if
 
-      else if (item%vartype == MAPL_BundleItem) then
-
-         call ESMF_StateGet(self%ExtDataState, trim(item%name), bundle,__RC__)
-         call ESMF_FieldBundleGet(bundle,grid=grid,__RC__)
-         call ESMF_ClockGet(CLOCK, currTIME=time, __RC__)
-         item%binterp1 = ESMF_FieldBundleCreate( __RC__)
-         call ESMF_FieldBundleSet(item%binterp1, GRID=GRID, __RC__)
-         item%binterp2 = ESMF_FieldBundleCreate( __RC__)
-         call ESMF_FieldBundleSet(item%binterp2, GRID=GRID, __RC__)
-         call MAPL_CFIORead(item%file,time,item%binterp1,noread=.true.,ignorecase=self%ignorecase,only_vars=item%var,__RC__)
-         call MAPL_CFIORead(item%file,time,item%binterp2,noread=.true.,ignorecase=self%ignorecase,only_vars=item%var,__RC__)
- 
       else if (item%vartype == MAPL_VectorField) then
     
          ! check that we are not asking for conservative regridding
@@ -634,9 +610,6 @@ CONTAINS
          if (self%primary%item(i)%name=='PS') then
             idx =i
          end if
-         if (self%primary%item(i)%vartype==MAPL_BundleItem) then
-            _ASSERT(.false.,'Cannot perform vertical interpolation on field bundle')
-         end if
       enddo
       _ASSERT(idx/=-1,'Surface pressure not present for vertical interpolation')
       self%primaryOrder(1)=idx
@@ -650,9 +623,6 @@ CONTAINS
       do i=1,size(self%primary%item)
          if (self%primary%item(i)%name=='PHIS') then
             idx =i
-         end if
-         if (self%primary%item(i)%vartype==MAPL_BundleItem) then
-            _ASSERT(.false.,'Cannot perform vertical interpolation on field bundle')
          end if
       enddo
       if (idx/=-1) then
@@ -1232,7 +1202,7 @@ CONTAINS
    
       type(PrimaryExport), intent(in) :: item
 
-      if ( item%update_freq%is_disabled() .or. &
+      if ( item%update_freq%is_single_shot() .or. &
            trim(item%file) == '/dev/null' ) then
           PrimaryExportIsConstant_ = .true. 
       else

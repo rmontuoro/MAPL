@@ -76,7 +76,6 @@ contains
             call swap_year(target_time,target_year,__RC__)
          end if 
       end if
-      write(*,*)'bmaa climyear: ',this%clim_year
 
       ! the target time is contained in the dataset and we are not extrapolating outside of source time selection based on available data
       if (this%clim_year == CLIM_NULL) then
@@ -113,12 +112,10 @@ contains
          else
             call this%get_file(output_file,target_time,0,__RC__)
             call this%get_time_on_file(output_file,target_time,bracketside,time_index,output_time,rc=status)
-            write(*,*)'bmaa try: ',trim(output_file),status,bracketside
             call ESMF_TimePrint(target_time,options='string')
             if (status /=  _SUCCESS) then
                if ( bracketside == 'R') then
                   call this%get_file(output_file,target_time,1,__RC__)
-            write(*,*)'bmaa tryR: ',trim(output_file),status,bracketside
                   call this%get_time_on_file(output_file,target_time,bracketside,time_index,output_time,__RC__)
                   call ESMF_TimeGet(target_time,yy=target_year,__RC__)
                   if (target_year < this%clim_year) then
@@ -128,7 +125,6 @@ contains
                   end if         
                else if (bracketside == 'L') then 
                   call this%get_file(output_file,target_time,-1,__RC__)
-            write(*,*)'bmaa tryL: ',trim(output_file),status,bracketside
                   call this%get_time_on_file(output_file,target_time,bracketside,time_index,output_time,__RC__)
                   call ESMF_TimeGet(target_time,yy=target_year,__RC__)
                   if (target_year > this%clim_year) then

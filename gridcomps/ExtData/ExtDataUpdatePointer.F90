@@ -14,10 +14,13 @@ module MAPL_ExtDataPointerUpdate
       logical :: disabled = .false.
       type(SimpleAlarm) :: update_alarm
       type(ESMF_TimeInterval) :: offset
+      logical :: single_shot = .false.
       contains
          procedure :: create_from_parameters
          procedure :: check_update
          procedure :: is_disabled
+         procedure :: is_single_shot
+         procedure :: disable
    end type
 
    contains
@@ -35,7 +38,7 @@ module MAPL_ExtDataPointerUpdate
       integer :: status,int_time,year,month,day,hour,minute,second
 
       if (update_freq == "-") then
-         this%disabled = .true.
+         this%single_shot = .true.
       else if (update_freq /= "PT0S") then
          int_time = string_to_integer_time(update_time)
          hour=int_time/10000
@@ -68,6 +71,7 @@ module MAPL_ExtDataPointerUpdate
          do_update = this%update_alarm%is_ringing(current_time,__RC__)
       else
          do_update = .true.
+         if (this%single_shot) this%disabled = .true.
       end if
       working_time = current_time+this%offset
 
@@ -78,5 +82,16 @@ module MAPL_ExtDataPointerUpdate
       logical :: disabled
       disabled = this%disabled
    end function is_disabled
+
+   function is_single_shot(this) result(single_shot)
+      class(ExtDataPointerUpdate), intent(in) :: this
+      logical :: single_shot
+      single_shot = this%single_shot
+   end function is_single_shot
+
+   subroutine disable(this)
+      class(ExtDataPointerUpdate), intent(inout) :: this
+      this%disabled = .true.
+   end subroutine
 
 end module MAPL_ExtDataPointerUpdate

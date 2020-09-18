@@ -75,12 +75,13 @@
 
   integer                    :: Ext_Debug
   character(len=ESMF_MAXSTR) :: Ext_TilePath
-  integer, parameter         :: MAPL_ExtDataVectorItem    = 32
   integer, parameter         :: MAPL_ExtDataLeft          = 1
   integer, parameter         :: MAPL_ExtDataRight         = 2
   integer, parameter         :: Null_Type         = 0
-  integer, parameter         :: Primary_Type      = 1
-  integer, parameter         :: Derived_TYpe      = 2
+  integer, parameter         :: Primary_Type_Scalar = 1
+  integer, parameter         :: Primary_Type_Vector_comp1 = 2
+  integer, parameter         :: Primary_Type_Vector_comp2 = 3
+  integer, parameter         :: Derived_TYpe      = 4
   logical                    :: hasRun
   character(len=ESMF_MAXSTR) :: error_msg_str
 
@@ -202,7 +203,6 @@ CONTAINS
     call ESMF_UserCompSetInternalState ( GC, 'MAPL_ExtData_state', wrap, STATUS )
     _VERIFY(STATUS)
   
-
     call MAPL_TimerAdd(gc,name="Initialize", rc=status)
     _VERIFY(STATUS)
     call MAPL_TimerAdd(gc,name="Run", rc=status)
@@ -411,10 +411,20 @@ CONTAINS
       found_in_config = config_yaml%name_in_config(trim(itemnames(i)))
       if (.not.found_in_config) call unsatisfied_imports%push_back(itemnames(i))
       call config_yaml%count_number(trim(itemnames(i)),num_primary,num_derived)
-      primaryitemcount=primaryitemcount+num_primary
       deriveditemcount=deriveditemcount+num_derived
-      if (num_primary /=0) item_types(i)=Primary_Type
-      if (num_derived /=0) item_types(i)=Derived_Type
+      if (num_derived ==0 .and. found_in_config) then
+         if (num_primary == 1) then 
+            item_types(i)=Primary_Type_Scalar
+            primaryitemcount=primaryitemcount+1
+         else if (num_primary == 2) then
+            item_types(i)=Primary_Type_Vector_comp1
+            primaryitemcount=primaryitemcount+1
+         else if (num_primary == 0) then
+            item_types(i)=Primary_Type_Vector_comp2
+         end if
+      else if (num_derived /=0 .and. found_in_config) then
+         item_types(i)=Derived_Type
+      end if
    enddo
    if (unsatisfied_imports%size() > 0) then
       do i=1,unsatisfied_imports%size()
@@ -434,7 +444,7 @@ CONTAINS
    num_primary=0
    num_derived=0 
    do i=1,size(itemnames)
-      if (item_types(i)==Primary_Type) then
+      if (item_types(i)==Primary_Type_Scalar .or. item_types(i)==Primary_Type_Vector_comp1) then
          num_primary=num_primary+1
          call config_yaml%fillin_primary(trim(itemnames(i)),self%primary%item(num_primary),time,__RC__)
       else if (item_types(i)==Derived_type) then
@@ -485,7 +495,7 @@ CONTAINS
             endif
          else if (item%vartype == MAPL_BundleItem) then
             _ASSERT(.false.,'Cannot assign constant to field bundle')
-         else if (item%vartype == MAPL_ExtDataVectorItem) then
+         else if (item%vartype == MAPL_VectorField) then
             call ESMF_StateGet(self%ExtDataState,trim(item%vcomp1),field,__RC__)
             call ESMF_FieldGet(field,dimCount=fieldRank,__RC__)
             if (fieldRank == 2) then 
@@ -524,8 +534,6 @@ CONTAINS
          end if
       end if
 
-      ! get clim year if this is cyclic
-      call GetClimYear(item,__RC__)
       ! get levels, other information
       call GetLevs(item,time,self%allowExtrap,__RC__)
       call ESMF_VMBarrier(vm)
@@ -566,8 +574,8 @@ CONTAINS
          call MAPL_CFIORead(item%file,time,item%binterp1,noread=.true.,ignorecase=self%ignorecase,only_vars=item%var,__RC__)
          call MAPL_CFIORead(item%file,time,item%binterp2,noread=.true.,ignorecase=self%ignorecase,only_vars=item%var,__RC__)
  
-      else if (item%vartype == MAPL_ExtDataVectorItem) then
-     
+      else if (item%vartype == MAPL_VectorField) then
+    
          ! check that we are not asking for conservative regridding
 !!$         if (item%Trans /= MAPL_HorzTransOrderBilinear) then
          if (item%Trans /= REGRID_METHOD_BILINEAR) then
@@ -603,7 +611,7 @@ CONTAINS
          call ESMF_StateGet(self%ExtDataState, trim(item%vcomp2), field,__RC__)
          left_field = MAPL_FieldCreate(field,item%fcomp2,doCopy=.true.,__RC__)
          right_field = MAPL_FieldCreate(field,item%fcomp2,doCopy=.true.,__RC__)
-         call item%modelGridFields%comp1%set_parameters(left_field=left_field,right_field=right_field, __RC__)
+         call item%modelGridFields%comp2%set_parameters(left_field=left_field,right_field=right_field, __RC__)
 
          if (item%do_fill .or. item%do_vertInterp) then
             call createFileLevBracket(item,cf_master,__RC__)
@@ -904,7 +912,6 @@ CONTAINS
                updateL = .false.
                swap    = .false.
             end if
-            write(*,*)'bmaa update: ',updateL,updateR,swap
 
             IF ( (Ext_Debug > 0) .AND. MAPL_Am_I_Root() ) THEN
                Write(*,*) '         ==> updateR: ', updateR
@@ -1323,67 +1330,6 @@ CONTAINS
 
      end function timestamp_
     
-     subroutine GetClimYear(item, rc)
-
-        type(PrimaryExport)      , intent(inout) :: item
-        integer, optional        , intent(out  ) :: rc
-
-        integer(ESMF_KIND_I4)      :: iyr
-        type(ESMF_TimeInterval)    :: zero
-        integer                    :: lasttoken
-        character(len=ESMF_MAXPATHLEN) :: file
-        character(len=2)           :: token
-        integer                    :: nymd, nhms, climYear
-        character(len=ESMF_MAXSTR) :: buffer
-        logical                    :: inRange
-        type(FileMetadataUtils), pointer :: metadata
-        integer :: status
-
-        buffer = trim(item%cyclic)
-
-        if (trim(buffer) == 'n') then
-
-           item%cyclic = "n"
-           _RETURN(ESMF_SUCCESS)
-
-        else if (trim(buffer) == 'single') then
-
-           _RETURN(ESMF_SUCCESS)
-        else if (trim(buffer) == 'y') then
-
-           item%cyclic = "y"
-
-           call ESMF_TimeIntervalSet(zero,__RC__)
-
-           if (item%frequency == zero) then
-              file = item%file
-           else
-              lasttoken = index(item%file,'%',back=.true.)
-              token = item%file(lasttoken+1:lasttoken+2)
-              _ASSERT(token == "m2",'Clim year must be month template "%m2"')
-              ! just put a time in so we can evaluate the template to open a file
-              nymd = 20000101
-              nhms = 0
-              call fill_grads_template(file,item%file,nymd=nymd,nhms=nhms,__RC__)
-           end if
-           call MakeMetadata(file,item%pfioCollection_id,metadata,__RC__)
-           call metadata%get_time_info(startYear=iyr)
-           item%climYear=iYr
-           _RETURN(ESMF_SUCCESS)
-        else
-           read(buffer,'(I4)') climYear
-           inRange = 0 <= climYear .and. climYear <= 3000
-           if (inRange) then
-              item%cyclic = "y"
-              item%climYear = climYear
-              _RETURN(ESMF_SUCCESS)
-           else
-              _ASSERT(.false., 'cyclic keyword was not y, n, or a valid year (0 < year < 3000)')
-           end if
-        end if
-
-     end subroutine GetClimYear
-
      subroutine GetLevs(item, time, allowExtrap, rc)
 
         type(PrimaryExport)      , intent(inout) :: item
@@ -1419,10 +1365,13 @@ CONTAINS
         else
            ftime = time
 
-           call ESMF_TimeGet(fTime,yy=iyr,mm=imm,dd=idd,h=ihr,m=imn,s=iss,__RC__)
-           if (item%cyclic == 'y') then
-              iyr = item%climyear
+           !call ESMF_TimeGet(fTime,yy=iyr,mm=imm,dd=idd,h=ihr,m=imn,s=iss,__RC__)
+           !if (item%cyclic == 'y') then
+           if (item%cycling) then
+              !iyr = item%climyear
+              ftime=item%reff_time
            end if
+           call ESMF_TimeGet(fTime,yy=iyr,mm=imm,dd=idd,h=ihr,m=imn,s=iss,__RC__)
            call MAPL_PackTime(nymd,iyr,imm,idd)
            call MAPL_PackTime(nhms,ihr,imn,iss)
            call fill_grads_template(file,item%file,nymd=nymd,nhms=nhms,__RC__)
@@ -1527,7 +1476,7 @@ CONTAINS
         integer :: status
  
         call item%modelGridFields%comp1%swap_fields(__RC__)
-        if (item%vartype == MAPL_ExtDataVectorItem) then
+        if (item%vartype == MAPL_VectorField) then
            call item%modelGridFields%comp2%swap_fields(__RC__)
         end if        
 
@@ -1581,7 +1530,7 @@ CONTAINS
 
      call ESMF_StateGet(state,item%vcomp1,field,__RC__)
      call item%modelGridFields%comp1%interpolate_to_time(field,time,__RC__)
-     if (item%vartype == MAPL_ExtDataVectorItem) then
+     if (item%vartype == MAPL_VectorField) then
         call ESMF_StateGet(state,item%vcomp1,field,__RC__)
         call item%modelGridFields%comp2%interpolate_to_time(field,time,__RC__)
      end if        
@@ -1614,7 +1563,7 @@ CONTAINS
            call vertInterpolation_pressKappa(field,newfield,psF,item%levs,MAPL_UNDEF,rc=status)
            _VERIFY(STATUS)
   
-        else if (item%vartype == MAPL_ExtDataVectorItem) then
+        else if (item%vartype == MAPL_VectorField) then
 
            id_ps = ExtState%primaryOrder(1)
            call MAPL_ExtDataGetBracket(ExtState%primary%item(id_ps),filec,field=psF,rc=status)
@@ -1642,7 +1591,7 @@ CONTAINS
            _VERIFY(STATUS)
            call MAPL_ExtDataFillField(item,field,newfield,rc=status)
            _VERIFY(STATUS)
-        else if (item%vartype == MAPL_ExtDataVectorItem) then
+        else if (item%vartype == MAPL_VectorField) then
            call MAPL_ExtDataGetBracket(item,filec,newField,getRL=.true.,vcomp=1,rc=status)
            _VERIFY(STATUS)
            call MAPL_ExtDataGetBracket(item,filec,Field,vcomp=1,rc=status)
@@ -2643,7 +2592,7 @@ CONTAINS
      call item%modelGridFields%auxiliary1%set_parameters(left_field=new_field,__RC__)
      new_field = MAPL_FieldCreate(field,newGrid,lm=item%lm,newName=trim(item%fcomp1),__RC__)
      call item%modelGridFields%auxiliary1%set_parameters(right_field=new_field,__RC__)
-     if (item%vartype==MAPL_ExtDataVectorItem) then
+     if (item%vartype==MAPL_VectorField) then
         new_field = MAPL_FieldCreate(field,newGrid,lm=item%lm,newName=trim(item%fcomp2),__RC__)
         call item%modelGridFields%auxiliary2%set_parameters(left_field=new_field,__RC__)
         new_field = MAPL_FieldCreate(field,newGrid,lm=item%lm,newName=trim(item%fcomp2),__RC__)

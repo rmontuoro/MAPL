@@ -72,8 +72,8 @@ module MAPL_ExtDataOldTypesCreator
       primary_item%isVector = allocated(rule%vector_partner)
       ! name and file var
       primary_item%name = trim(item_name)
-      primary_item%vartype = MAPL_FieldItem
       if (primary_item%isVector) then
+         primary_item%vartype = MAPL_VectorField
          primary_item%vcomp1 = trim(item_name)
          primary_item%vcomp2 = trim(rule%vector_partner)
          primary_item%var = rule%file_var
@@ -83,6 +83,7 @@ module MAPL_ExtDataOldTypesCreator
          primary_item%fileVars%xname  = trim(rule%file_var)
          primary_item%fileVars%yname  = trim(rule%vector_file_partner)
       else
+         primary_item%vartype = MAPL_FieldItem
          primary_item%vcomp1 = trim(item_name)
          primary_item%var = rule%file_var
          primary_item%fcomp1 = rule%file_var
@@ -130,7 +131,7 @@ module MAPL_ExtDataOldTypesCreator
       primary_item%isConst = .false.
       dataset => this%file_stream_map%at(trim(rule%file_template_key))
 
-      if (primary_item%cycling .or. primary_item%allow_extrap) then
+      if (primary_item%cycling) then
          call clim_handler%initialize(dataset,__RC__)
          allocate(primary_item%filestream,source=clim_handler)
       else
@@ -138,7 +139,9 @@ module MAPL_ExtDataOldTypesCreator
          allocate(primary_item%filestream,source=simple_handler)
       end if
 
+      write(*,*)'bmaa dataset: ',trim(dataset%file_template)
       primary_item%file = dataset%file_template
+      write(*,*)'bmaa file: ',trim(primary_item%file)
       if (primary_item%file(1:9) == '/dev/null') then
          primary_item%isConst = .true.
          semi_pos = index(primary_item%file,':')

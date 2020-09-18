@@ -99,6 +99,8 @@ contains
       data_set%valid_range = config%at("valid_range")
       if (size(data_set%valid_range) > 0) then
          _ASSERT(size(data_set%valid_range)==2,'valid_range must be 2 integers')
+         call ESMF_TimeGet(data_set%reff_time,yy=iyy,mm=imm,dd=idd,h=ihh,m=imn,__RC__)
+         call ESMF_TimeSet(data_set%reff_time,yy=data_set%valid_range(1),mm=imm,dd=idd,h=ihh,m=imn,__RC__)
       end if
       data_set%collection_id = MAPL_ExtDataAddCollection(data_set%file_template)
 

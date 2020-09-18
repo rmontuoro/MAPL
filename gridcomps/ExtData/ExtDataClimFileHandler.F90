@@ -71,11 +71,12 @@ contains
             this%clim_year = target_year 
             call swap_year(target_time,target_year,__RC__)
          else if (target_year >= this%valid_range(2)) then
-            target_year = this%valid_range(1)
+            target_year = this%valid_range(2)
             this%clim_year = target_year
             call swap_year(target_time,target_year,__RC__)
          end if 
       end if
+      write(*,*)'bmaa climyear: ',this%clim_year
 
       ! the target time is contained in the dataset and we are not extrapolating outside of source time selection based on available data
       if (this%clim_year == CLIM_NULL) then
@@ -112,9 +113,12 @@ contains
          else
             call this%get_file(output_file,target_time,0,__RC__)
             call this%get_time_on_file(output_file,target_time,bracketside,time_index,output_time,rc=status)
+            write(*,*)'bmaa try: ',trim(output_file),status,bracketside
+            call ESMF_TimePrint(target_time,options='string')
             if (status /=  _SUCCESS) then
                if ( bracketside == 'R') then
                   call this%get_file(output_file,target_time,1,__RC__)
+            write(*,*)'bmaa tryR: ',trim(output_file),status,bracketside
                   call this%get_time_on_file(output_file,target_time,bracketside,time_index,output_time,__RC__)
                   call ESMF_TimeGet(target_time,yy=target_year,__RC__)
                   if (target_year < this%clim_year) then
@@ -124,6 +128,7 @@ contains
                   end if         
                else if (bracketside == 'L') then 
                   call this%get_file(output_file,target_time,-1,__RC__)
+            write(*,*)'bmaa tryL: ',trim(output_file),status,bracketside
                   call this%get_time_on_file(output_file,target_time,bracketside,time_index,output_time,__RC__)
                   call ESMF_TimeGet(target_time,yy=target_year,__RC__)
                   if (target_year > this%clim_year) then
@@ -192,10 +197,16 @@ contains
       type(ESMF_Time), intent(inout) :: time
       integer, intent(in) :: year
       integer, optional, intent(out) :: rc
-
+      logical :: is_leap_year
+      type(ESMF_Calendar) :: calendar
       integer :: status, month, day, hour, minute, second
-  
-      call ESMF_TimeGet(time,mm=month,dd=day,h=hour,m=minute,s=second,__RC__)
+ 
+      is_leap_year=.false. 
+      call ESMF_TimeGet(time,mm=month,dd=day,h=hour,m=minute,s=second,calendar=calendar,__RC__)
+      if (day==29 .and. month==2) then
+         is_leap_year = ESMF_CalendarIsLeapYear(calendar,year,__RC__)
+         if (.not.is_leap_year) day=28
+      end if
       call ESMF_TimeSet(time,yy=year,mm=month,dd=day,h=hour,m=minute,s=second,__RC__)
       _RETURN(_SUCCESS)
    end subroutine

@@ -593,16 +593,31 @@ contains
          
    end function equals
 
-
-   function generate_grid_name(this) result(name)
+   function generate_grid_name(this,add_decomposition) result(name)
       character(len=:), allocatable :: name
       class (TripolarGridFactory), intent(in) :: this
+      logical, optional, intent(in) :: add_decomposition
 
-      _UNUSED_DUMMY(this)
+      character(len=4) :: im_string, jm_string
+      character(len=10) :: decomp
+      logical :: add_decomp
 
-      name = ''
-      ! needs to be implemented
-      error stop -1
+      if (present(add_decomposition)) then
+         add_decomp=add_decomposition
+      else
+         add_decomp=.false.
+      end if
+
+      if (add_decomp) then
+         write(decomp,'(a1,i4.4,a1,i4.4)')'_',this%nx,'x',this%ny
+      else
+         decomp=''
+      end if
+
+      write(im_string,'(i4.4)') this%im_world
+      write(jm_string,'(i4.4)') this%jm_world
+
+      name = 'PE' // im_string // 'x' // jm_string // '-TM' // trim(decomp)
 
    end function generate_grid_name
 

@@ -545,9 +545,10 @@ contains
    end function equals
 
 
-   function generate_grid_name(this) result(name)
+   function generate_grid_name(this,add_decomposition) result(name)
       character(len=:), allocatable :: name
       class (LlcGridFactory), intent(in) :: this
+      logical, optional, intent(in) :: add_decomposition
 
       _UNUSED_DUMMY(this)
 

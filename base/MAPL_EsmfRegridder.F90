@@ -56,6 +56,7 @@ module MAPL_EsmfRegridderMod
       procedure :: do_regrid
       procedure :: create_route_handle
       procedure :: select_route_handle
+      procedure :: get_routehandle_filename
  
    end type EsmfRegridder
 
@@ -1360,6 +1361,8 @@ contains
      logical :: global, isPresent
      type(RegridderSpecRouteHandleMap), pointer :: route_handles, transpose_route_handles
      type(ESMF_RouteHandle) :: route_handle, transpose_route_handle
+     character(len=:), allocatable :: file_name, transpose_file_name
+     logical :: rh_file_exists,transpose_rh_file_exists
     
      if (kind == ESMF_TYPEKIND_R4) then
         route_handles => route_handles_r4
@@ -1373,106 +1376,123 @@ contains
 
      unmappedaction = ESMF_UNMAPPEDACTION_ERROR
 
+     file_name = this%get_routehandle_filename(rc=status)
+     _VERIFY(status)
+     transpose_file_name = "transpose_"//file_name
+
      spec = this%get_spec()
 
      if (route_handles%count(spec) == 0) then  ! new route_handle
-        src_field = ESMF_FieldCreate(spec%grid_in, typekind=kind, &
-             & indexflag=ESMF_INDEX_DELOCAL, staggerloc=ESMF_STAGGERLOC_CENTER, rc=status)
-        _VERIFY(status)
+        inquire(file=file_name,exist=rh_file_exists)
+        inquire(file=transpose_file_name,exist=transpose_rh_file_exists)
+        if (rh_file_exists .and. transpose_rh_file_exists) then
+            route_handle=ESMF_RouteHandleCreate(filename=file_name,rc=status)
+            _VERIFY(status)
+            transpose_route_handle=ESMF_RouteHandleCreate(filename=transpose_file_name,rc=status)
+            _VERIFY(status)
+            call route_handles%insert(spec, route_handle)
+            call transpose_route_handles%insert(spec, transpose_route_handle)
+        else
+           src_field = ESMF_FieldCreate(spec%grid_in, typekind=kind, &
+                & indexflag=ESMF_INDEX_DELOCAL, staggerloc=ESMF_STAGGERLOC_CENTER, rc=status)
+           _VERIFY(status)
 
-        if (MAPL_GridHasDE(spec%grid_in)) then
-           if (kind == ESMF_TYPEKIND_R4) then
-              call ESMF_FieldGet(src_field, localDe=0, farrayPtr=src_dummy_r4, rc=status)
-              _VERIFY(status)
-              src_dummy_r4 = 0
-           else if (kind == ESMF_TYPEKIND_R8) then
-              call ESMF_FieldGet(src_field, localDe=0, farrayPtr=src_dummy_r8, rc=status)
-              _VERIFY(status)
-              src_dummy_r8 = 0
+           if (MAPL_GridHasDE(spec%grid_in)) then
+              if (kind == ESMF_TYPEKIND_R4) then
+                 call ESMF_FieldGet(src_field, localDe=0, farrayPtr=src_dummy_r4, rc=status)
+                 _VERIFY(status)
+                 src_dummy_r4 = 0
+              else if (kind == ESMF_TYPEKIND_R8) then
+                 call ESMF_FieldGet(src_field, localDe=0, farrayPtr=src_dummy_r8, rc=status)
+                 _VERIFY(status)
+                 src_dummy_r8 = 0
+              end if
            end if
-        end if
 
-        dst_field = ESMF_FieldCreate(spec%grid_out, typekind=kind, &
-             & indexflag=ESMF_INDEX_DELOCAL, staggerloc=ESMF_STAGGERLOC_CENTER, rc=status)
-        _VERIFY(status) 
-        if (MAPL_GridHasDE(spec%grid_out)) then
-           if (kind == ESMF_TYPEKIND_R4) then
-              call ESMF_FieldGet(dst_field, localDe=0, farrayPtr=dst_dummy_r4, rc=status)
-              _VERIFY(status)
-              dst_dummy_r4 = 0
-           else if (kind == ESMF_TYPEKIND_R8) then
-              call ESMF_FieldGet(dst_field, localDe=0, farrayPtr=dst_dummy_r8, rc=status)
-              _VERIFY(status)
-              dst_dummy_r8 = 0
+           dst_field = ESMF_FieldCreate(spec%grid_out, typekind=kind, &
+                & indexflag=ESMF_INDEX_DELOCAL, staggerloc=ESMF_STAGGERLOC_CENTER, rc=status)
+           _VERIFY(status) 
+           if (MAPL_GridHasDE(spec%grid_out)) then
+              if (kind == ESMF_TYPEKIND_R4) then
+                 call ESMF_FieldGet(dst_field, localDe=0, farrayPtr=dst_dummy_r4, rc=status)
+                 _VERIFY(status)
+                 dst_dummy_r4 = 0
+              else if (kind == ESMF_TYPEKIND_R8) then
+                 call ESMF_FieldGet(dst_field, localDe=0, farrayPtr=dst_dummy_r8, rc=status)
+                 _VERIFY(status)
+                 dst_dummy_r8 = 0
+              end if
            end if
+
+           counter = counter + 1
+
+           srcTermProcessing=0
+           call ESMF_AttributeGet(spec%grid_in, name='Global',isPresent=isPresent,rc=status)
+           if (isPresent) then
+              call ESMF_AttributeGet(spec%grid_in, name='Global',value=global,rc=status)
+              if (.not.global) unmappedaction=ESMF_UNMAPPEDACTION_IGNORE
+           end if
+           select case (spec%regrid_method)
+           case (REGRID_METHOD_BILINEAR)
+
+              call ESMF_FieldRegridStore(src_field, dst_field, &
+                   & regridmethod=ESMF_REGRIDMETHOD_BILINEAR, &
+                   & linetype=ESMF_LINETYPE_GREAT_CIRCLE, & ! closer to SJ Lin interpolation weights?
+                   & srcTermProcessing = srcTermProcessing, &
+                   & factorList=factorList, factorIndexList=factorIndexList, &
+                   & routehandle=route_handle, unmappedaction=unmappedaction, rc=status)
+              _VERIFY(status)
+           case (REGRID_METHOD_PATCH)
+
+              call ESMF_FieldRegridStore(src_field, dst_field, &
+                   & regridmethod=ESMF_REGRIDMETHOD_PATCH, &
+                   & linetype=ESMF_LINETYPE_GREAT_CIRCLE, & ! closer to SJ Lin interpolation weights?
+                   & srcTermProcessing = srcTermProcessing, &
+                   & factorList=factorList, factorIndexList=factorIndexList, &
+                   & routehandle=route_handle, unmappedaction=unmappedaction, rc=status)
+              _VERIFY(status)
+           case (REGRID_METHOD_CONSERVE_2ND)
+
+              call ESMF_FieldRegridStore(src_field, dst_field, &
+                   & regridmethod=ESMF_REGRIDMETHOD_CONSERVE_2ND, &
+                   & linetype=ESMF_LINETYPE_GREAT_CIRCLE, & ! closer to SJ Lin interpolation weights?
+                   & srcTermProcessing = srcTermProcessing, &
+                   & factorList=factorList, factorIndexList=factorIndexList, &
+                   & routehandle=route_handle, unmappedaction=unmappedaction, rc=status)
+              _VERIFY(status)
+           case (REGRID_METHOD_CONSERVE, REGRID_METHOD_VOTE, REGRID_METHOD_FRACTION)
+              call ESMF_FieldRegridStore(src_field, dst_field, &
+                   & regridmethod=ESMF_REGRIDMETHOD_CONSERVE, &
+                   & srcTermProcessing = srcTermProcessing, &
+                   & factorList=factorList, factorIndexList=factorIndexList, &
+                   & routehandle=route_handle, unmappedaction=unmappedaction, rc=status)
+              _VERIFY(status)
+           case (REGRID_METHOD_NEAREST_STOD)
+              call ESMF_FieldRegridStore(src_field, dst_field, &
+                   & regridmethod=ESMF_REGRIDMETHOD_NEAREST_STOD, &
+                   & factorList=factorList, factorIndexList=factorIndexList, &
+                   & routehandle=route_handle, unmappedaction=unmappedaction, rc=status)
+              _VERIFY(status)
+           case default
+              _ASSERT(.false.)
+           end select
+           call ESMF_FieldSMMStore(src_field,dst_field,dummy_rh,transpose_route_handle, &
+                & factorList,factorIndexList,srcTermProcessing=srcTermProcessing, &
+                & rc=status)
+           _VERIFY(status)
+           deallocate(factorList,factorIndexList)
+           call ESMF_FieldDestroy(src_field, rc=status)
+           _VERIFY(status)
+           call ESMF_FieldDestroy(dst_field, rc=status)
+           _VERIFY(status)
+           call ESMF_RouteHandleWrite(route_handle,file_name,rc=status)
+           _VERIFY(status)
+           call ESMF_RouteHandleWrite(transpose_route_handle,transpose_file_name,rc=status)
+           _VERIFY(status)
         end if
-
-        counter = counter + 1
-
-        srcTermProcessing=0
-        call ESMF_AttributeGet(spec%grid_in, name='Global',isPresent=isPresent,rc=status)
-        if (isPresent) then
-           call ESMF_AttributeGet(spec%grid_in, name='Global',value=global,rc=status)
-           if (.not.global) unmappedaction=ESMF_UNMAPPEDACTION_IGNORE
-        end if
-        select case (spec%regrid_method)
-        case (REGRID_METHOD_BILINEAR)
-
-           call ESMF_FieldRegridStore(src_field, dst_field, &
-                & regridmethod=ESMF_REGRIDMETHOD_BILINEAR, &
-                & linetype=ESMF_LINETYPE_GREAT_CIRCLE, & ! closer to SJ Lin interpolation weights?
-                & srcTermProcessing = srcTermProcessing, &
-                & factorList=factorList, factorIndexList=factorIndexList, &
-                & routehandle=route_handle, unmappedaction=unmappedaction, rc=status)
-           _VERIFY(status)
-        case (REGRID_METHOD_PATCH)
-
-           call ESMF_FieldRegridStore(src_field, dst_field, &
-                & regridmethod=ESMF_REGRIDMETHOD_PATCH, &
-                & linetype=ESMF_LINETYPE_GREAT_CIRCLE, & ! closer to SJ Lin interpolation weights?
-                & srcTermProcessing = srcTermProcessing, &
-                & factorList=factorList, factorIndexList=factorIndexList, &
-                & routehandle=route_handle, unmappedaction=unmappedaction, rc=status)
-           _VERIFY(status)
-        case (REGRID_METHOD_CONSERVE_2ND)
-
-           call ESMF_FieldRegridStore(src_field, dst_field, &
-                & regridmethod=ESMF_REGRIDMETHOD_CONSERVE_2ND, &
-                & linetype=ESMF_LINETYPE_GREAT_CIRCLE, & ! closer to SJ Lin interpolation weights?
-                & srcTermProcessing = srcTermProcessing, &
-                & factorList=factorList, factorIndexList=factorIndexList, &
-                & routehandle=route_handle, unmappedaction=unmappedaction, rc=status)
-           _VERIFY(status)
-        case (REGRID_METHOD_CONSERVE, REGRID_METHOD_VOTE, REGRID_METHOD_FRACTION)
-           call ESMF_FieldRegridStore(src_field, dst_field, &
-                & regridmethod=ESMF_REGRIDMETHOD_CONSERVE, &
-                & srcTermProcessing = srcTermProcessing, &
-                & factorList=factorList, factorIndexList=factorIndexList, &
-                & routehandle=route_handle, unmappedaction=unmappedaction, rc=status)
-           _VERIFY(status)
-        case (REGRID_METHOD_NEAREST_STOD)
-           call ESMF_FieldRegridStore(src_field, dst_field, &
-                & regridmethod=ESMF_REGRIDMETHOD_NEAREST_STOD, &
-                & factorList=factorList, factorIndexList=factorIndexList, &
-                & routehandle=route_handle, unmappedaction=unmappedaction, rc=status)
-           _VERIFY(status)
-        case default
-           _ASSERT(.false.)
-        end select
-        call ESMF_FieldSMMStore(src_field,dst_field,dummy_rh,transpose_route_handle, &
-             & factorList,factorIndexList,srcTermProcessing=srcTermProcessing, &
-             & rc=status)
-        _VERIFY(status)
-
         call route_handles%insert(spec, route_handle)
         call transpose_route_handles%insert(spec, transpose_route_handle)
-        ! Free resources
-        deallocate(factorList,factorIndexList)
 
-        call ESMF_FieldDestroy(src_field, rc=status)
-        _VERIFY(status)
-        call ESMF_FieldDestroy(dst_field, rc=status)
-        _VERIFY(status)
      end if
 
      _RETURN(_SUCCESS)
@@ -1525,5 +1545,30 @@ contains
      _RETURN(_SUCCESS)
 
    end function select_route_handle
+
+   function get_routehandle_filename(this,rc) result(filename)
+      class(ESMFRegridder), intent(in) :: this
+      integer, optional, intent(out) :: rc
+
+      integer :: optional
+
+      integer :: status
+      character(*), parameter :: Iam = 'MAPL_EsmfRegridder::get_routehandle_filename'
+      character(len=:), allocatable :: filename,gridname_in,gridname_out
+      class (AbstractGridFactory), pointer :: factory_in, factory_out
+      type(RegridderSpec) :: spec
+
+      spec = this%get_spec()
+      factory_in => grid_manager%get_factory(spec%grid_in,rc=status)
+      _VERIFY(status)
+      factory_out => grid_manager%get_factory(spec%grid_out,rc=status)
+      _VERIFY(status)
+      gridname_in=factory_in%generate_grid_name(add_decomposition=.true.)
+      gridname_out=factory_out%generate_grid_name(add_decomposition=.true.)
+      filename = gridname_in // "__" // gridname_out // ".rh"
+      _RETURN(_SUCCESS)
+
+   end function get_routehandle_filename
+
    
 end module MAPL_EsmfRegridderMod

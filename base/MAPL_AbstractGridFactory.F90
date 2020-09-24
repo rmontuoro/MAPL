@@ -145,10 +145,11 @@ module MAPL_AbstractGridFactoryMod
          integer, optional, intent(out) :: rc
       end subroutine halo
 
-      function generate_grid_name(this) result(name)
+      function generate_grid_name(this,add_decomposition) result(name)
          import AbstractGridFactory
          implicit none
          character(len=:), allocatable :: name
+         logical, optional, intent(in) :: add_decomposition
          class (AbstractGridFactory), intent(in) :: this
       end function generate_grid_name
 

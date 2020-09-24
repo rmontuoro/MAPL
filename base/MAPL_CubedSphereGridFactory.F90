@@ -825,15 +825,31 @@ contains
 
    end subroutine halo
 
-   function generate_grid_name(this) result(name)
+   function generate_grid_name(this,add_decomposition) result(name)
       class (CubedSphereGridFactory), intent(in) :: this
+      logical, optional, intent(in) :: add_decomposition
       character(len=:), allocatable :: name
 
       character(len=4) :: im_string
+      character(len=10) :: decomp
+      logical :: add_decomp
+
+      if (present(add_decomposition)) then
+         add_decomp=add_decomposition
+      else
+         add_decomp=.false.
+      end if
+
+      if (add_decomp) then
+         write(decomp,'(a1,i4.4,a1,i4.4)')'_',this%nx,"x",this%ny
+      else
+         decomp=''
+      end if
+
 
       write(im_string,'(i4.4)') this%im_world
 
-      name = 'CF' // im_string //'x6C'
+      name = 'CF' // im_string //'x6C' // trim(decomp)
 
    end function generate_grid_name
 

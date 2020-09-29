@@ -56,7 +56,6 @@ module MAPL_EsmfRegridderMod
       procedure :: do_regrid
       procedure :: create_route_handle
       procedure :: select_route_handle
-      procedure :: get_routehandle_filename
  
    end type EsmfRegridder
 
@@ -1376,11 +1375,11 @@ contains
 
      unmappedaction = ESMF_UNMAPPEDACTION_ERROR
 
-     file_name = this%get_routehandle_filename(rc=status)
+     spec = this%get_spec()
+
+     file_name = spec%generate_weight_filename(rc=status)
      _VERIFY(status)
      transpose_file_name = "transpose_"//file_name
-
-     spec = this%get_spec()
 
      if (route_handles%count(spec) == 0) then  ! new route_handle
         inquire(file=file_name,exist=rh_file_exists)
@@ -1480,19 +1479,18 @@ contains
                 & factorList,factorIndexList,srcTermProcessing=srcTermProcessing, &
                 & rc=status)
            _VERIFY(status)
+
+           !call ESMF_RouteHandleWrite(route_handle,file_name)
+           !call ESMF_RouteHandleWrite(transpose_route_handle,transpose_file_name)
            deallocate(factorList,factorIndexList)
+
            call ESMF_FieldDestroy(src_field, rc=status)
            _VERIFY(status)
            call ESMF_FieldDestroy(dst_field, rc=status)
            _VERIFY(status)
-           call ESMF_RouteHandleWrite(route_handle,file_name,rc=status)
-           _VERIFY(status)
-           call ESMF_RouteHandleWrite(transpose_route_handle,transpose_file_name,rc=status)
-           _VERIFY(status)
         end if
         call route_handles%insert(spec, route_handle)
         call transpose_route_handles%insert(spec, transpose_route_handle)
-
      end if
 
      _RETURN(_SUCCESS)
@@ -1545,30 +1543,5 @@ contains
      _RETURN(_SUCCESS)
 
    end function select_route_handle
-
-   function get_routehandle_filename(this,rc) result(filename)
-      class(ESMFRegridder), intent(in) :: this
-      integer, optional, intent(out) :: rc
-
-      integer :: optional
-
-      integer :: status
-      character(*), parameter :: Iam = 'MAPL_EsmfRegridder::get_routehandle_filename'
-      character(len=:), allocatable :: filename,gridname_in,gridname_out
-      class (AbstractGridFactory), pointer :: factory_in, factory_out
-      type(RegridderSpec) :: spec
-
-      spec = this%get_spec()
-      factory_in => grid_manager%get_factory(spec%grid_in,rc=status)
-      _VERIFY(status)
-      factory_out => grid_manager%get_factory(spec%grid_out,rc=status)
-      _VERIFY(status)
-      gridname_in=factory_in%generate_grid_name(add_decomposition=.true.)
-      gridname_out=factory_out%generate_grid_name(add_decomposition=.true.)
-      filename = gridname_in // "__" // gridname_out // ".rh"
-      _RETURN(_SUCCESS)
-
-   end function get_routehandle_filename
-
    
 end module MAPL_EsmfRegridderMod

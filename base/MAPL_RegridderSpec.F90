@@ -62,6 +62,7 @@ module MAPL_RegridderSpecMod
       generic :: operator (==) => equals
       procedure :: spec_less_than
       generic :: operator (<) => spec_less_than
+      procedure :: generate_weight_filename
    end type RegridderSpec
    
 
@@ -245,6 +246,32 @@ contains
       return
          
    end function spec_less_than
+
+   function generate_weight_filename(this,rc) result(filename)
+      use MAPL_AbstractGridFactoryMod
+      use MAPL_GridManagerMod
+      class(RegridderSpec), intent(in) :: this
+      integer, optional, intent(out) :: rc
+
+      integer :: optional
+
+      integer :: status
+      character(*), parameter :: Iam = 'MAPL_EsmfRegridder::generate_weight_filename'
+      character(len=:), allocatable :: filename,gridname_in,gridname_out
+      class (AbstractGridFactory), pointer :: factory_in, factory_out
+      character(len=4) :: regrid_type
+
+      factory_in => grid_manager%get_factory(this%grid_in,rc=status)
+      _VERIFY(status)
+      factory_out => grid_manager%get_factory(this%grid_out,rc=status)
+      _VERIFY(status)
+      write(regrid_type,'(i4.4)')this%regrid_method
+      gridname_in=factory_in%generate_grid_name(add_decomposition=.true.)
+      gridname_out=factory_out%generate_grid_name(add_decomposition=.true.)
+      filename = gridname_in // "__" // gridname_out // "__" // regrid_type  // ".rh"
+      _RETURN(_SUCCESS)
+
+   end function generate_weight_filename
 
 end module MAPL_RegridderSpecMod
 #undef _UNUSED_DUMMY

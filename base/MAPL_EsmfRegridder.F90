@@ -1480,8 +1480,8 @@ contains
                 & rc=status)
            _VERIFY(status)
 
-           !call ESMF_RouteHandleWrite(route_handle,file_name)
-           !call ESMF_RouteHandleWrite(transpose_route_handle,transpose_file_name)
+           call ESMF_RouteHandleWrite(route_handle,file_name)
+           call ESMF_RouteHandleWrite(transpose_route_handle,transpose_file_name)
            deallocate(factorList,factorIndexList)
 
            call ESMF_FieldDestroy(src_field, rc=status)

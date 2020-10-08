@@ -9,8 +9,9 @@ set (srcs
 
 esma_add_library(
         ${this} SRCS ${srcs}
-        DEPENDENCIES MAPL.base MAPL.shared MAPL.profiler MAPL.pfio MAPL_cfio_r4 pflogger gftl-shared MPI::MPI_Fortran
+        DEPENDENCIES MAPL.base MAPL.shared MAPL.profiler MAPL.pfio MAPL_cfio_r4 MPI::MPI_Fortran
 )
+target_link_libraries(${this} PRIVATE gftl-shared)
 
 if (PFUNIT_FOUND)
     add_subdirectory(tests EXCLUDE_FROM_ALL)

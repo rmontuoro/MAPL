@@ -57,6 +57,7 @@ module MAPL_CapGridCompMod
      type(ESMF_Time),  allocatable :: AlarmRingTime(:)
      logical,          allocatable :: ringingState(:)
    contains
+     procedure :: set
      procedure :: set_services
      procedure :: initialize
      procedure :: initialize_extdata
@@ -174,11 +175,13 @@ contains
 
     integer                      :: HEARTBEAT_DT
     type(ESMF_Alarm)             :: PERPETUAL
+    type(ESMF_Grid)              :: grid
     character(len=ESMF_MAXSTR)   :: clockname
     character(len=ESMF_MAXSTR)   :: HIST_CF, ROOT_CF, EXTDATA_CF
     character(len=ESMF_MAXSTR )           :: DYCORE
     character(len=ESMF_MAXPATHLEN) :: user_dirpath,tempString
     logical                      :: tend,foundPath
+    logical                      :: gridIsPresent
 
 
     type (MAPL_MetaComp), pointer :: maplobj
@@ -545,6 +548,19 @@ contains
     call MAPL_Get(MAPLOBJ, gcs = cap%gcs, gim = cap%child_imports, gex = cap%child_exports, rc = status)
     _VERIFY(status)
 
+    !  Set Root child grid if provided by parent
+    !-------------------------------------------
+
+    call ESMF_GridCompGet(cap%gc, gridIsPresent=gridIsPresent, rc=status)
+    _VERIFY(status)
+
+    if (gridIsPresent) then
+      call ESMF_GridCompGet(cap%gc, grid=grid, rc=status)
+      _VERIFY(status)
+      call ESMF_GridCompSet(cap%gcs(cap%root_id), grid=grid, rc=status)
+      _VERIFY(status)
+    end if
+
     ! Run as usual unless PRINTSPEC> 0 as set in CAP.rc. If set then
     ! model will not run completely and instead it will simply run MAPL_SetServices
     ! and print out the IM/EX specs. This step uses MAPL_StatePrintSpecCSV found
@@ -819,6 +835,20 @@ contains
 
     _RETURN(ESMF_SUCCESS)
   end subroutine finalize_gc
+
+
+  subroutine set(this, grid, clock, rc)
+    class(MAPL_CapGridComp),  intent(inout) :: this
+    type(ESMF_Grid),  optional, intent(in ) :: grid
+    type(ESMF_Clock), optional, intent(in ) :: clock
+    integer,          optional, intent(out) :: rc
+
+    integer :: status
+
+    call ESMF_GridCompSet(this%gc, grid=grid, clock=clock, rc = status)
+    _VERIFY(status)
+    _RETURN(ESMF_SUCCESS)
+  end subroutine set
 
 
   subroutine set_services_gc(gc, rc)

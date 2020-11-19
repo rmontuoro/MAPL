@@ -41,6 +41,9 @@ if (NOT COMMAND esma)
 endif ()
 
 option(BUILD_WITH_FLAP "Use FLAP for command line processing" ON)
+if (BUILD_WITH_FLAP)
+  find_package(FLAP REQUIRED)
+endif ()
 
 ecbuild_declare_project()
 
@@ -58,7 +61,6 @@ if (NOT Baselibs_FOUND)
 
   find_package(ESMF MODULE REQUIRED)
 
-  find_package(FLAP REQUIRED)
   find_package(YAFYAML REQUIRED)
 
   find_package(GFTL REQUIRED)

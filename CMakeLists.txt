@@ -4,7 +4,7 @@ cmake_policy (SET CMP0054 NEW)
 
 project (
   MAPL
-  VERSION 2.3.6
+  VERSION 2.4.0
   LANGUAGES Fortran CXX C)  # Note - CXX is required for ESMF
 
 if (EXISTS ${CMAKE_CURRENT_LIST_DIR}/ESMA_cmake)
@@ -80,6 +80,7 @@ add_subdirectory (shared)
 add_subdirectory (include)
 add_subdirectory (base)
 add_subdirectory (MAPL)
+add_subdirectory (gridcomps)
 
 if (PFUNIT_FOUND)
   include (add_pfunit_ctest)
